@@ -60,6 +60,106 @@ const INITIAL_EMPTY_ITEMS: LineItem[] = [
   },
 ];
 
+interface PaginatedSheet {
+  pageIndex: number;
+  isFirstPage: boolean;
+  isLastPage: boolean;
+  items: LineItem[];
+  hasTable: boolean;
+  hasFooterSection: boolean;
+  showAddRow: boolean;
+}
+
+function paginateInvoiceItems(allItems: LineItem[]): PaginatedSheet[] {
+  const SINGLE_PAGE_MAX = 10;
+  const PAGE_1_FULL_CAPACITY = 15;
+  const INTERMEDIATE_CAPACITY = 14;
+  const FINAL_PAGE_WITH_FOOTER_MAX = 10;
+
+  // 1. Single Page: Table + Full Header + Footer Section all fit on Page 1
+  if (allItems.length <= SINGLE_PAGE_MAX) {
+    return [
+      {
+        pageIndex: 0,
+        isFirstPage: true,
+        isLastPage: true,
+        items: allItems,
+        hasTable: true,
+        hasFooterSection: true,
+        showAddRow: true,
+      },
+    ];
+  }
+
+  // 2. Table fits on Page 1 (11 to 15 items), only Terms & Conditions/Totals jump to Page 2
+  if (allItems.length <= PAGE_1_FULL_CAPACITY) {
+    return [
+      {
+        pageIndex: 0,
+        isFirstPage: true,
+        isLastPage: false,
+        items: allItems,
+        hasTable: true,
+        hasFooterSection: false,
+        showAddRow: true,
+      },
+      {
+        pageIndex: 1,
+        isFirstPage: false,
+        isLastPage: true,
+        items: [],
+        hasTable: false,
+        hasFooterSection: true,
+        showAddRow: true,
+      },
+    ];
+  }
+
+  // 3. Page 1 table is full (15 items) and overflows into a new table on subsequent page(s)
+  const sheets: PaginatedSheet[] = [];
+  sheets.push({
+    pageIndex: 0,
+    isFirstPage: true,
+    isLastPage: false,
+    items: allItems.slice(0, PAGE_1_FULL_CAPACITY),
+    hasTable: true,
+    hasFooterSection: false,
+    showAddRow: false,
+  });
+
+  const remaining = allItems.slice(PAGE_1_FULL_CAPACITY);
+  let offset = 0;
+  while (offset < remaining.length) {
+    const itemsLeft = remaining.length - offset;
+    if (itemsLeft <= FINAL_PAGE_WITH_FOOTER_MAX) {
+      sheets.push({
+        pageIndex: sheets.length,
+        isFirstPage: false,
+        isLastPage: true,
+        items: remaining.slice(offset),
+        hasTable: true,
+        hasFooterSection: true,
+        showAddRow: true,
+      });
+      break;
+    } else {
+      const take = Math.min(INTERMEDIATE_CAPACITY, itemsLeft - 1);
+      sheets.push({
+        pageIndex: sheets.length,
+        isFirstPage: false,
+        isLastPage: false,
+        items: remaining.slice(offset, offset + take),
+        hasTable: true,
+        hasFooterSection: false,
+        showAddRow: false,
+      });
+      offset += take;
+    }
+  }
+
+  return sheets;
+}
+
 export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => {
   // Brand Header State
   const [companyName, setCompanyName] = useState("Pretheeksha Fertility Clinic");
@@ -290,6 +390,7 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
   }, 0);
 
   const grandTotal = subtotal + totalGst;
+  const sheets = paginateInvoiceItems(items);
 
   const formatMoney = (val: number) => {
     return `₹${val.toLocaleString("en-IN", {
@@ -625,486 +726,549 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
 
       {/* A4 Workbench Canvas */}
       <div className="a4-document-workbench">
-        <div className="a4-paper-sheet">
-          {/* 1. Hospital Header Block */}
-          <div className="a4-header-block">
-            <div className="a4-brand-group">
-              <div className="a4-logo-title-row">
-                <div className="a4-logo-icon">P</div>
-                <div className="a4-company-name-wrap">
-                  <input
-                    type="text"
-                    className="a4-company-name-input"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    title="Edit Clinic Name"
-                  />
-                  <input
-                    type="text"
-                    className="a4-company-sub-input"
-                    value={invoiceSubtitle}
-                    onChange={(e) => setInvoiceSubtitle(e.target.value)}
-                    title="Edit Subtitle"
-                    placeholder="INVOICE"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="a4-header-right-phone">
-              <Phone className="h-3.5 w-3.5 text-[#0284c7] shrink-0" />
-              <input
-                type="text"
-                className="a4-header-phone-input"
-                value={companyPhone}
-                onChange={(e) => setCompanyPhone(e.target.value)}
-                placeholder="Phone number"
-              />
-            </div>
-          </div>
-
-          {/* 2. Main Content Body */}
-          <div className="a4-document-body">
-            {/* Meta Section (Bill To & Invoice Details) */}
-            <div className="a4-meta-boxes-row">
-              {/* Left Column: Bill To */}
-              <div className="a4-meta-box-col">
-                <div className="a4-bill-to-title">Bill To:</div>
-                <div className="a4-meta-fields-list">
-                  <div className="a4-meta-field-row">
-                    <span className="a4-meta-field-label">Name</span>
-                    <span className="a4-meta-field-colon">:</span>
-                    <div className="flex-1 flex items-center gap-1.5">
+        {sheets.map((sheet) => (
+          <div key={`sheet_${sheet.pageIndex}`} className="a4-paper-sheet">
+            {/* 1. Header Block (Full on Page 1, Compact on Page 2+) */}
+            {sheet.isFirstPage ? (
+              <div className="a4-header-block">
+                <div className="a4-brand-group">
+                  <div className="a4-logo-title-row">
+                    <div className="a4-logo-icon">P</div>
+                    <div className="a4-company-name-wrap">
                       <input
                         type="text"
-                        className="a4-meta-field-input font-medium"
-                        value={clientName}
-                        onChange={(e) => setClientName(e.target.value)}
-                        placeholder="Search or enter patient name..."
+                        className="a4-company-name-input"
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                        title="Edit Clinic Name"
                       />
-                      <button
-                        type="button"
-                        className="a4-search-patient-btn"
-                        onClick={() => {
-                          setPatientSearchTerm(clientName);
-                          setIsPatientSearchOpen(true);
-                        }}
-                        title="Search Patient in Database"
-                      >
-                        <Search className="h-3.5 w-3.5" />
-                      </button>
+                      <input
+                        type="text"
+                        className="a4-company-sub-input"
+                        value={invoiceSubtitle}
+                        onChange={(e) => setInvoiceSubtitle(e.target.value)}
+                        title="Edit Subtitle"
+                        placeholder="INVOICE"
+                      />
                     </div>
                   </div>
-                  <div className="a4-meta-field-row">
-                    <span className="a4-meta-field-label">Address</span>
-                    <span className="a4-meta-field-colon">:</span>
-                    <textarea
-                      rows={2}
-                      className="a4-meta-field-input resize-none"
-                      value={clientAddress}
-                      onChange={(e) => setClientAddress(e.target.value)}
-                      placeholder="Street, City, Postal Code"
-                    />
-                  </div>
-                  <div className="a4-meta-field-row">
-                    <span className="a4-meta-field-label">Phone</span>
-                    <span className="a4-meta-field-colon">:</span>
-                    <input
-                      type="text"
-                      className="a4-meta-field-input"
-                      value={clientPhone}
-                      onChange={(e) => setClientPhone(e.target.value)}
-                      placeholder="Phone number"
-                    />
-                  </div>
                 </div>
-              </div>
 
-              {/* Right Column: Invoice ID & Meta */}
-              <div className="a4-meta-box-col">
-                <div className="a4-invoice-badge-box">
-                  <span className="a4-invoice-hash">#</span>
+                <div className="a4-header-right-phone">
+                  <Phone className="h-3.5 w-3.5 text-[#0284c7] shrink-0" />
                   <input
                     type="text"
-                    value={invoiceNo}
-                    onChange={(e) => setInvoiceNo(e.target.value)}
-                    className="a4-invoice-badge-input"
-                    placeholder={`INV-${new Date().getFullYear()}-0001`}
+                    className="a4-header-phone-input"
+                    value={companyPhone}
+                    onChange={(e) => setCompanyPhone(e.target.value)}
+                    placeholder="Phone number"
                   />
                 </div>
-                <div className="a4-meta-fields-list">
-                  <div className="a4-meta-field-row">
-                    <span className="a4-meta-field-label">Date</span>
-                    <span className="a4-meta-field-colon">:</span>
-                    <input
-                      type="text"
-                      className="a4-meta-field-input"
-                      value={invoiceDate}
-                      onChange={(e) => setInvoiceDate(e.target.value)}
-                      placeholder="Invoice Date"
-                    />
+              </div>
+            ) : (
+              <div className="a4-continuation-header">
+                <div className="a4-continuation-brand">
+                  <div className="a4-continuation-logo">P</div>
+                  <div>
+                    <div className="a4-continuation-title">{companyName}</div>
+                    <div className="a4-continuation-sub">Invoice #{invoiceNo} (Continuation)</div>
+                  </div>
+                </div>
+                <div className="a4-continuation-patient-info">
+                  <div>
+                    Patient: <strong className="text-neutral-900 dark:text-neutral-100">{clientName || "—"}</strong>
+                  </div>
+                  <div className="a4-page-counter-badge">
+                    Page {sheet.pageIndex + 1} of {sheets.length}
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Line Items Table with HSN & GST % columns */}
-            <div className="a4-table-wrap">
-              <table className="a4-items-table">
-                <thead>
-                  <tr>
-                    <th>Description</th>
-                    <th className="th-hsn">HSN/SAC</th>
-                    <th className="th-qty">Qty.</th>
-                    <th className="th-price">Unit Price (₹)</th>
-                    <th className="th-gst">GST %</th>
-                    <th className="th-gst-amt">GST (₹)</th>
-                    <th className="th-amount">Total (₹)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => {
-                    const rowTaxable = (Number(item.qty) || 0) * (Number(item.unitPrice) || 0);
-                    const rowGstAmount = (rowTaxable * (Number(item.gstRate) || 0)) / 100;
-                    const rowTotalAmount = rowTaxable + rowGstAmount;
-                    const isSearchingThis = activeSearchRowId === item.id;
-
-                    return (
-                      <tr key={item.id} className="a4-table-row relative group">
-                        <td className="relative">
-                          <textarea
-                            ref={(el) => {
-                              textareaRefs.current[item.id] = el;
-                              if (el) adjustTextareaHeight(el);
-                            }}
-                            rows={1}
-                            className="a4-table-textarea resize-none font-medium"
-                            value={item.description}
-                            onFocus={() => {
-                              setActiveSearchRowId(item.id);
-                              setSearchQuery(item.description);
-                            }}
-                            onChange={(e) => {
-                              handleItemChange(item.id, "description", e.target.value);
-                              setActiveSearchRowId(item.id);
-                              setSearchQuery(e.target.value);
-                              adjustTextareaHeight(e.target);
-                            }}
-                            placeholder="Enter or search item name..."
-                          />
-
-                          {/* Clean Box Dropdown with Item Name Only */}
-                          {isSearchingThis && (
-                            <div ref={searchBoxRef} className="a4-clean-dropdown">
-                              {(() => {
-                                const seen = new Set<string>();
-                                const list: Array<{
-                                  key: string;
-                                  name: string;
-                                  onClick: () => void;
-                                }> = [];
-
-                                for (const t1 of tier1Matches) {
-                                  const name = t1.itemName;
-                                  const lower = name.toLowerCase().trim();
-                                  if (!seen.has(lower)) {
-                                    seen.add(lower);
-                                    list.push({
-                                      key: `t1_${t1._id || name}`,
-                                      name,
-                                      onClick: () => handleSelectClinicCachedItem(item.id, t1),
-                                    });
-                                  }
-                                }
-
-                                for (const t2 of tier2Matches) {
-                                  const name = t2.name;
-                                  const lower = name.toLowerCase().trim();
-                                  if (!seen.has(lower)) {
-                                    seen.add(lower);
-                                    list.push({
-                                      key: `t2_${t2.id || name}`,
-                                      name,
-                                      onClick: () => handleSelectMasterItem(item.id, t2),
-                                    });
-                                  }
-                                }
-
-                                if (list.length === 0) {
-                                  return (
-                                    <div className="px-3 py-2 text-[11px] text-neutral-400">
-                                      {searchQuery.length < 2
-                                        ? "Type 2 or more letters to search..."
-                                        : "No items found"}
-                                    </div>
-                                  );
-                                }
-
-                                return list.map((itemObj) => (
-                                  <div
-                                    key={itemObj.key}
-                                    className="a4-clean-dropdown-row"
-                                    onMouseDown={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      itemObj.onClick();
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      itemObj.onClick();
-                                    }}
-                                  >
-                                    <span className="truncate">{itemObj.name}</span>
-                                  </div>
-                                ));
-                              })()}
-                            </div>
-                          )}
-                        </td>
-
-                        {/* HSN / SAC Code Column */}
-                        <td className="td-hsn">
+            {/* 2. Main Content Body */}
+            <div className="a4-document-body">
+              {/* Meta Section (Bill To & Invoice Details - only on Page 1) */}
+              {sheet.isFirstPage && (
+                <div className="a4-meta-boxes-row">
+                  {/* Left Column: Bill To */}
+                  <div className="a4-meta-box-col">
+                    <div className="a4-bill-to-title">Bill To:</div>
+                    <div className="a4-meta-fields-list">
+                      <div className="a4-meta-field-row">
+                        <span className="a4-meta-field-label">Name</span>
+                        <span className="a4-meta-field-colon">:</span>
+                        <div className="flex-1 flex items-center gap-1.5">
                           <input
                             type="text"
-                            className="a4-table-input text-center font-mono text-xs w-full"
-                            value={item.hsnCode}
-                            onChange={(e) => handleItemChange(item.id, "hsnCode", e.target.value)}
-                            placeholder="HSN Code"
-                            list="hsn-codes-datalist"
+                            className="a4-meta-field-input font-medium"
+                            value={clientName}
+                            onChange={(e) => setClientName(e.target.value)}
+                            placeholder="Search or enter patient name..."
                           />
-                        </td>
+                          <button
+                            type="button"
+                            className="a4-search-patient-btn"
+                            onClick={() => {
+                              setPatientSearchTerm(clientName);
+                              setIsPatientSearchOpen(true);
+                            }}
+                            title="Search Patient in Database"
+                          >
+                            <Search className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="a4-meta-field-row">
+                        <span className="a4-meta-field-label">Address</span>
+                        <span className="a4-meta-field-colon">:</span>
+                        <textarea
+                          rows={2}
+                          className="a4-meta-field-input resize-none"
+                          value={clientAddress}
+                          onChange={(e) => setClientAddress(e.target.value)}
+                          placeholder="Street, City, Postal Code"
+                        />
+                      </div>
+                      <div className="a4-meta-field-row">
+                        <span className="a4-meta-field-label">Phone</span>
+                        <span className="a4-meta-field-colon">:</span>
+                        <input
+                          type="text"
+                          className="a4-meta-field-input"
+                          value={clientPhone}
+                          onChange={(e) => setClientPhone(e.target.value)}
+                          placeholder="Phone number"
+                        />
+                      </div>
+                    </div>
+                  </div>
 
-                        {/* Quantity */}
-                        <td className="td-qty">
-                          <input
-                            type="number"
-                            className="a4-table-input text-center"
-                            value={item.qty === 0 ? "" : item.qty}
-                            onChange={(e) =>
-                              handleItemChange(item.id, "qty", e.target.value)
-                            }
-                            placeholder="1"
-                            min={1}
-                          />
-                        </td>
+                  {/* Right Column: Invoice ID & Meta */}
+                  <div className="a4-meta-box-col">
+                    <div className="a4-invoice-badge-box">
+                      <span className="a4-invoice-hash">#</span>
+                      <input
+                        type="text"
+                        value={invoiceNo}
+                        onChange={(e) => setInvoiceNo(e.target.value)}
+                        className="a4-invoice-badge-input"
+                        placeholder={`INV-${new Date().getFullYear()}-0001`}
+                      />
+                    </div>
+                    <div className="a4-meta-fields-list">
+                      <div className="a4-meta-field-row">
+                        <span className="a4-meta-field-label">Date</span>
+                        <span className="a4-meta-field-colon">:</span>
+                        <input
+                          type="text"
+                          className="a4-meta-field-input"
+                          value={invoiceDate}
+                          onChange={(e) => setInvoiceDate(e.target.value)}
+                          placeholder="Invoice Date"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-                        {/* Unit Price (Billed Price) */}
-                        <td className="td-price">
-                          <input
-                            type="number"
-                            className="a4-table-input text-right font-medium"
-                            value={item.unitPrice === 0 ? "" : item.unitPrice}
-                            onChange={(e) =>
-                              handleItemChange(item.id, "unitPrice", e.target.value)
-                            }
-                            placeholder="0.00"
-                            step="any"
-                          />
-                        </td>
-
-                        {/* GST % Column (Connected to HSN Code) */}
-                        <td className="td-gst">
-                          <div className="flex items-center justify-center">
-                            <input
-                              type="number"
-                              className="a4-table-input text-center w-8 text-xs font-semibold"
-                              value={item.gstRate}
-                              onChange={(e) =>
-                                handleItemChange(item.id, "gstRate", e.target.value)
-                              }
-                              placeholder="0"
-                              min={0}
-                              max={28}
-                            />
-                            <span className="text-[11px] text-neutral-500 font-semibold">%</span>
-                          </div>
-                        </td>
-
-                        {/* Calculated GST Amount Column */}
-                        <td className="td-gst-amt text-right font-medium text-neutral-600 dark:text-neutral-400 font-mono text-xs">
-                          {formatMoney(rowGstAmount)}
-                        </td>
-
-                        {/* Total Row Amount (Taxable + GST) */}
-                        <td className="td-amount text-right font-bold text-neutral-900 dark:text-neutral-100 font-mono text-xs relative">
-                          <span>{formatMoney(rowTotalAmount)}</span>
-                          {items.length > 1 && (
-                            <button
-                              type="button"
-                              className="a4-row-delete-hover-btn"
-                              onClick={() => handleDeleteItem(item.id)}
-                              title="Delete line"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </td>
+              {/* Line Items Table with HSN & GST % columns (when this sheet has a table) */}
+              {sheet.hasTable && (
+                <div className="a4-table-wrap">
+                  <table className="a4-items-table">
+                    <thead>
+                      <tr>
+                        <th>Description</th>
+                        <th className="th-hsn">HSN/SAC</th>
+                        <th className="th-qty">Qty.</th>
+                        <th className="th-price">Unit Price (₹)</th>
+                        <th className="th-gst">GST %</th>
+                        <th className="th-gst-amt">GST (₹)</th>
+                        <th className="th-amount">Total (₹)</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {sheet.items.map((item) => {
+                        const rowTaxable = (Number(item.qty) || 0) * (Number(item.unitPrice) || 0);
+                        const rowGstAmount = (rowTaxable * (Number(item.gstRate) || 0)) / 100;
+                        const rowTotalAmount = rowTaxable + rowGstAmount;
+                        const isSearchingThis = activeSearchRowId === item.id;
 
-              <datalist id="hsn-codes-datalist">
-                {hsnCodes.map((h) => (
-                  <option key={h.hsnCode} value={h.hsnCode}>
-                    {h.category} - {h.gstRate}% GST ({h.description})
-                  </option>
-                ))}
-              </datalist>
+                        return (
+                          <tr key={item.id} className="a4-table-row relative group">
+                            <td className="relative">
+                              <textarea
+                                ref={(el) => {
+                                  textareaRefs.current[item.id] = el;
+                                  if (el) adjustTextareaHeight(el);
+                                }}
+                                rows={1}
+                                className="a4-table-textarea resize-none font-medium"
+                                value={item.description}
+                                onFocus={() => {
+                                  setActiveSearchRowId(item.id);
+                                  setSearchQuery(item.description);
+                                }}
+                                onChange={(e) => {
+                                  handleItemChange(item.id, "description", e.target.value);
+                                  setActiveSearchRowId(item.id);
+                                  setSearchQuery(e.target.value);
+                                  adjustTextareaHeight(e.target);
+                                }}
+                                placeholder="Enter or search item name..."
+                              />
 
-              <div className="a4-add-row-bar">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-3 text-xs rounded-[4px]"
-                  onClick={handleAddItem}
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  <span>Add Line Item</span>
-                </Button>
-              </div>
+                              {/* Clean Box Dropdown with Item Name Only */}
+                              {isSearchingThis && (
+                                <div ref={searchBoxRef} className="a4-clean-dropdown">
+                                  {(() => {
+                                    const seen = new Set<string>();
+                                    const list: Array<{
+                                      key: string;
+                                      name: string;
+                                      onClick: () => void;
+                                    }> = [];
+
+                                    for (const t1 of tier1Matches) {
+                                      const name = t1.itemName;
+                                      const lower = name.toLowerCase().trim();
+                                      if (!seen.has(lower)) {
+                                        seen.add(lower);
+                                        list.push({
+                                          key: `t1_${t1._id || name}`,
+                                          name,
+                                          onClick: () => handleSelectClinicCachedItem(item.id, t1),
+                                        });
+                                      }
+                                    }
+
+                                    for (const t2 of tier2Matches) {
+                                      const name = t2.name;
+                                      const lower = name.toLowerCase().trim();
+                                      if (!seen.has(lower)) {
+                                        seen.add(lower);
+                                        list.push({
+                                          key: `t2_${t2.id || name}`,
+                                          name,
+                                          onClick: () => handleSelectMasterItem(item.id, t2),
+                                        });
+                                      }
+                                    }
+
+                                    if (list.length === 0) {
+                                      return (
+                                        <div className="px-3 py-2 text-[11px] text-neutral-400">
+                                          {searchQuery.length < 2
+                                            ? "Type 2 or more letters to search..."
+                                            : "No items found"}
+                                        </div>
+                                      );
+                                    }
+
+                                    return list.map((itemObj) => (
+                                      <div
+                                        key={itemObj.key}
+                                        className="a4-clean-dropdown-row"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          itemObj.onClick();
+                                        }}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          itemObj.onClick();
+                                        }}
+                                      >
+                                        <span className="truncate">{itemObj.name}</span>
+                                      </div>
+                                    ));
+                                  })()}
+                                </div>
+                              )}
+                            </td>
+
+                            {/* HSN / SAC Code Column */}
+                            <td className="td-hsn">
+                              <input
+                                type="text"
+                                className="a4-table-input text-center font-mono text-xs w-full"
+                                value={item.hsnCode}
+                                onChange={(e) => handleItemChange(item.id, "hsnCode", e.target.value)}
+                                placeholder="HSN Code"
+                                list="hsn-codes-datalist"
+                              />
+                            </td>
+
+                            {/* Quantity */}
+                            <td className="td-qty">
+                              <input
+                                type="number"
+                                className="a4-table-input text-center"
+                                value={item.qty === 0 ? "" : item.qty}
+                                onChange={(e) =>
+                                  handleItemChange(item.id, "qty", e.target.value)
+                                }
+                                placeholder="1"
+                                min={1}
+                              />
+                            </td>
+
+                            {/* Unit Price (Billed Price) */}
+                            <td className="td-price">
+                              <input
+                                type="number"
+                                className="a4-table-input text-right font-medium"
+                                value={item.unitPrice === 0 ? "" : item.unitPrice}
+                                onChange={(e) =>
+                                  handleItemChange(item.id, "unitPrice", e.target.value)
+                                }
+                                placeholder="0.00"
+                                step="any"
+                              />
+                            </td>
+
+                            {/* GST % Column (Connected to HSN Code) */}
+                            <td className="td-gst">
+                              <div className="flex items-center justify-center">
+                                <input
+                                  type="number"
+                                  className="a4-table-input text-center w-8 text-xs font-semibold"
+                                  value={item.gstRate}
+                                  onChange={(e) =>
+                                    handleItemChange(item.id, "gstRate", e.target.value)
+                                  }
+                                  placeholder="0"
+                                  min={0}
+                                  max={28}
+                                />
+                                <span className="text-[11px] text-neutral-500 font-semibold">%</span>
+                              </div>
+                            </td>
+
+                            {/* Calculated GST Amount Column */}
+                            <td className="td-gst-amt text-right font-medium text-neutral-600 dark:text-neutral-400 font-mono text-xs">
+                              {formatMoney(rowGstAmount)}
+                            </td>
+
+                            {/* Total Row Amount (Taxable + GST) */}
+                            <td className="td-amount text-right font-bold text-neutral-900 dark:text-neutral-100 font-mono text-xs relative">
+                              <span>{formatMoney(rowTotalAmount)}</span>
+                              {items.length > 1 && (
+                                <button
+                                  type="button"
+                                  className="a4-row-delete-hover-btn"
+                                  onClick={() => handleDeleteItem(item.id)}
+                                  title="Delete line"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+
+                  {/* Bottom line action: Add Line Item */}
+                  {sheet.showAddRow && (
+                    <div className="a4-table-actions-bar">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-3 text-xs rounded-[4px]"
+                        onClick={handleAddItem}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        <span>Add Line Item</span>
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Continuation Summary Banner when sheet has no table (Page 2 for 11–15 items) */}
+              {!sheet.hasTable && (
+                <div className="a4-summary-page-banner">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
+                      Invoice Summary & Authorization
+                    </span>
+                    <span className="text-[11px] text-neutral-500 font-mono">
+                      (All {items.length} items detailed on Page 1)
+                    </span>
+                  </div>
+                  {sheet.showAddRow && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-3 text-xs rounded-[4px]"
+                      onClick={handleAddItem}
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      <span>Add Line Item</span>
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {/* Terms and Conditions vs Totals with GST summary (Only on sheet with hasFooterSection) */}
+              {sheet.hasFooterSection && (
+                <>
+                  <div className="a4-terms-totals-row">
+                    <div className="a4-terms-col">
+                      <span className="a4-terms-title">Terms and Conditions:</span>
+                      <textarea
+                        className="a4-terms-input"
+                        rows={2}
+                        value={terms}
+                        onChange={(e) => setTerms(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="a4-totals-col">
+                      <div className="a4-total-line">
+                        <span className="a4-total-line-label">Subtotal (Taxable Value)</span>
+                        <span className="a4-total-line-val">{formatMoney(subtotal)}</span>
+                      </div>
+                      <div className="a4-total-line">
+                        <span className="a4-total-line-label">Total GST</span>
+                        <span className="a4-total-line-val">{formatMoney(totalGst)}</span>
+                      </div>
+                      <div className="a4-grand-total-banner">
+                        <span>Total</span>
+                        <span className="a4-grand-total-val">{formatMoney(grandTotal)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Payment Method & Signature */}
+                  <div className="a4-payment-sig-row">
+                    <div className="a4-payment-col">
+                      <span className="a4-payment-title">Payment Method:</span>
+                      <div className="a4-payment-options-grid">
+                        <div
+                          className="a4-payment-radio-item"
+                          onClick={() => setPaymentMethod("cash")}
+                        >
+                          <div
+                            className={`a4-radio-box ${
+                              paymentMethod === "cash" ? "active" : ""
+                            }`}
+                          >
+                            {paymentMethod === "cash" && <div className="a4-radio-inner-dot" />}
+                          </div>
+                          <span>Cash</span>
+                        </div>
+
+                        <div
+                          className="a4-payment-radio-item"
+                          onClick={() => setPaymentMethod("bank_transfer")}
+                        >
+                          <div
+                            className={`a4-radio-box ${
+                              paymentMethod === "bank_transfer" ? "active" : ""
+                            }`}
+                          >
+                            {paymentMethod === "bank_transfer" && (
+                              <div className="a4-radio-inner-dot" />
+                            )}
+                          </div>
+                          <span>Bank Transfer</span>
+                        </div>
+
+                        <div
+                          className="a4-payment-radio-item"
+                          onClick={() => setPaymentMethod("debit")}
+                        >
+                          <div
+                            className={`a4-radio-box ${
+                              paymentMethod === "debit" ? "active" : ""
+                            }`}
+                          >
+                            {paymentMethod === "debit" && <div className="a4-radio-inner-dot" />}
+                          </div>
+                          <span>Debit</span>
+                        </div>
+
+                        <div
+                          className="a4-payment-radio-item"
+                          onClick={() => setPaymentMethod("digital_wallet")}
+                        >
+                          <div
+                            className={`a4-radio-box ${
+                              paymentMethod === "digital_wallet" ? "active" : ""
+                            }`}
+                          >
+                            {paymentMethod === "digital_wallet" && (
+                              <div className="a4-radio-inner-dot" />
+                            )}
+                          </div>
+                          <span>Digital Wallet</span>
+                        </div>
+                      </div>
+
+                      <p className="a4-payment-thanks">
+                        Thanks for your attention. We value our partnership
+                        <br />
+                        and look forward to providing excellent services.
+                      </p>
+                    </div>
+
+                    {/* Signature Block */}
+                    <div className="a4-signature-col">
+                      <div className="a4-sig-date-row">
+                        <span className="font-bold">Date:</span>
+                        <input
+                          type="text"
+                          value={invoiceDate}
+                          onChange={(e) => setInvoiceDate(e.target.value)}
+                          className="bg-transparent border-none outline-none font-medium text-xs w-28"
+                        />
+                      </div>
+
+                      <div className="a4-sig-graphic-wrap">
+                        <svg
+                          viewBox="0 0 160 50"
+                          className="h-10 text-[#1e2229] fill-none stroke-current"
+                          style={{ strokeWidth: 2.2, strokeLinecap: "round", strokeLinejoin: "round" }}
+                        >
+                          <path d="M 15 35 Q 30 35 40 35 L 50 35 L 55 12 L 62 44 L 70 20 L 78 40 L 84 28 L 92 36 L 104 35 Q 120 35 145 35" />
+                        </svg>
+                      </div>
+
+                      <div className="a4-sig-line" />
+
+                      <input
+                        type="text"
+                        className="a4-signatory-name-input"
+                        value={signatoryName}
+                        onChange={(e) => setSignatoryName(e.target.value)}
+                        placeholder="Signatory Name"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
-            {/* Terms and Conditions vs Totals with GST summary */}
-            <div className="a4-terms-totals-row">
-              <div className="a4-terms-col">
-                <span className="a4-terms-title">Terms and Conditions:</span>
-                <textarea
-                  className="a4-terms-input"
-                  rows={2}
-                  value={terms}
-                  onChange={(e) => setTerms(e.target.value)}
-                />
-              </div>
-
-              <div className="a4-totals-col">
-                <div className="a4-total-line">
-                  <span className="a4-total-line-label">Subtotal (Taxable Value)</span>
-                  <span className="a4-total-line-val">{formatMoney(subtotal)}</span>
-                </div>
-                <div className="a4-total-line">
-                  <span className="a4-total-line-label">Total GST</span>
-                  <span className="a4-total-line-val">{formatMoney(totalGst)}</span>
-                </div>
-                <div className="a4-grand-total-banner">
-                  <span>Total</span>
-                  <span className="a4-grand-total-val">{formatMoney(grandTotal)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Payment Method & Signature */}
-            <div className="a4-payment-sig-row">
-              <div className="a4-payment-col">
-                <span className="a4-payment-title">Payment Method:</span>
-                <div className="a4-payment-options-grid">
-                  <div
-                    className="a4-payment-radio-item"
-                    onClick={() => setPaymentMethod("cash")}
-                  >
-                    <div
-                      className={`a4-radio-box ${
-                        paymentMethod === "cash" ? "active" : ""
-                      }`}
-                    >
-                      {paymentMethod === "cash" && <div className="a4-radio-inner-dot" />}
-                    </div>
-                    <span>Cash</span>
-                  </div>
-
-                  <div
-                    className="a4-payment-radio-item"
-                    onClick={() => setPaymentMethod("bank_transfer")}
-                  >
-                    <div
-                      className={`a4-radio-box ${
-                        paymentMethod === "bank_transfer" ? "active" : ""
-                      }`}
-                    >
-                      {paymentMethod === "bank_transfer" && (
-                        <div className="a4-radio-inner-dot" />
-                      )}
-                    </div>
-                    <span>Bank Transfer</span>
-                  </div>
-
-                  <div
-                    className="a4-payment-radio-item"
-                    onClick={() => setPaymentMethod("debit")}
-                  >
-                    <div
-                      className={`a4-radio-box ${
-                        paymentMethod === "debit" ? "active" : ""
-                      }`}
-                    >
-                      {paymentMethod === "debit" && <div className="a4-radio-inner-dot" />}
-                    </div>
-                    <span>Debit</span>
-                  </div>
-
-                  <div
-                    className="a4-payment-radio-item"
-                    onClick={() => setPaymentMethod("digital_wallet")}
-                  >
-                    <div
-                      className={`a4-radio-box ${
-                        paymentMethod === "digital_wallet" ? "active" : ""
-                      }`}
-                    >
-                      {paymentMethod === "digital_wallet" && (
-                        <div className="a4-radio-inner-dot" />
-                      )}
-                    </div>
-                    <span>Digital Wallet</span>
-                  </div>
-                </div>
-
-                <p className="a4-payment-thanks">
-                  Thanks for your attention. We value our partnership
-                  <br />
-                  and look forward to providing excellent services.
-                </p>
-              </div>
-
-              {/* Signature Block */}
-              <div className="a4-signature-col">
-                <div className="a4-sig-date-row">
-                  <span className="font-bold">Date:</span>
-                  <input
-                    type="text"
-                    value={invoiceDate}
-                    onChange={(e) => setInvoiceDate(e.target.value)}
-                    className="bg-transparent border-none outline-none font-medium text-xs w-28"
-                  />
-                </div>
-
-                <div className="a4-sig-graphic-wrap">
-                  <svg
-                    viewBox="0 0 160 50"
-                    className="h-10 text-[#1e2229] fill-none stroke-current"
-                    style={{ strokeWidth: 2.2, strokeLinecap: "round", strokeLinejoin: "round" }}
-                  >
-                    <path d="M 15 35 Q 30 35 40 35 L 50 35 L 55 12 L 62 44 L 70 20 L 78 40 L 84 28 L 92 36 L 104 35 Q 120 35 145 35" />
-                  </svg>
-                </div>
-
-                <div className="a4-sig-line" />
-
-                <input
-                  type="text"
-                  className="a4-signatory-name-input"
-                  value={signatoryName}
-                  onChange={(e) => setSignatoryName(e.target.value)}
-                  placeholder="Signatory Name"
-                />
-              </div>
+            {/* 3. Footer Bottom Bar with Page numbering */}
+            <div className="a4-footer-bar">
+              <span className="a4-footer-page-num">
+                Page {sheet.pageIndex + 1} of {sheets.length}
+              </span>
             </div>
           </div>
+        ))}
 
-          {/* 3. Footer Bottom Bar */}
-          <div className="a4-footer-bar" />
-        </div>
+        {/* Global Datalist for HSN codes */}
+        <datalist id="hsn-codes-datalist">
+          {hsnCodes.map((h) => (
+            <option key={h.hsnCode} value={h.hsnCode}>
+              {h.category} - {h.gstRate}% GST ({h.description})
+            </option>
+          ))}
+        </datalist>
       </div>
 
       {/* Price Configuration Dialog for Master Medicine */}

@@ -2676,7 +2676,9 @@ button.btn-secondary:hover {
   background-color: var(--bg-muted);
   padding: 32px 16px;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
   overflow-y: auto;
 }
 
@@ -2694,6 +2696,84 @@ button.btn-secondary:hover {
   box-sizing: border-box;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   position: relative;
+}
+
+/* Continuation Header for Page 2+ */
+.a4-continuation-header {
+  padding: 14px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid #0284c7;
+  background: transparent;
+}
+
+.a4-continuation-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.a4-continuation-logo {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  background-color: #0284c7;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.a4-continuation-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.a4-continuation-sub {
+  font-size: 11px;
+  color: #64748b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.a4-continuation-patient-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11px;
+  color: #334155;
+}
+
+.a4-page-counter-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background-color: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+/* Bottom Banner: Continued on Page X */
+.a4-continuation-notice {
+  margin-top: 14px;
+  padding: 8px 16px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 4px;
+  background-color: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #0284c7;
 }
 
 /* Header Hospital Clean Block (50% reduced height, no dark fill, bluish bold underline) */
@@ -2786,13 +2866,13 @@ button.btn-secondary:hover {
   width: 135px;
 }
 
-/* Document Inner Body (removed wasted top gap) */
+/* Document Inner Body (balanced padding with airy breathing room) */
 .a4-document-body {
-  padding: 16px 40px 32px 40px;
+  padding: 24px 40px 20px 40px;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 
 /* Bill To & Invoice Meta Row */
@@ -2801,6 +2881,8 @@ button.btn-secondary:hover {
   justify-content: space-between;
   gap: 40px;
   align-items: flex-start;
+  margin-top: 6px;
+  margin-bottom: 10px;
 }
 
 .a4-meta-box-col {
@@ -3193,6 +3275,33 @@ button.btn-secondary:hover {
   margin-top: 8px;
 }
 
+.a4-table-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.a4-table-actions-bar .a4-continuation-notice {
+  margin-top: 0;
+}
+
+.a4-summary-page-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+  background-color: #f8fafc;
+}
+
+.dark .a4-summary-page-banner {
+  border-color: #27272a;
+  background-color: #18181b;
+}
+
 /* Clean Box Dropdown for Line Items */
 .a4-clean-dropdown {
   position: absolute;
@@ -3438,11 +3547,24 @@ button.btn-secondary:hover {
   outline: none;
 }
 
-/* Footer Bottom Bar */
+/* Footer Bottom Bar - Solid black strip at the end of each page */
 .a4-footer-bar {
   height: 24px;
-  background-color: #1e2229;
+  background-color: #181b20;
   width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 20px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.a4-footer-page-num {
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #94a3b8;
+  font-weight: 500;
 }
 
 /* Print Rules */
@@ -3453,6 +3575,9 @@ button.btn-secondary:hover {
   .a4-row-delete-btn,
   .a4-row-delete-hover-btn,
   .a4-add-row-bar,
+  .a4-table-actions-bar button,
+  .a4-summary-page-banner button,
+  .a4-search-patient-btn,
   .invoices-manager-wrapper > *:not(.invoice-create-sliding-panel) {
     display: none !important;
   }
@@ -3467,15 +3592,42 @@ button.btn-secondary:hover {
   }
   .a4-document-workbench {
     padding: 0 !important;
+    gap: 0 !important;
     background: transparent !important;
+    display: block !important;
   }
   .a4-paper-sheet {
     box-shadow: none !important;
     border: none !important;
     width: 210mm !important;
     min-height: 297mm !important;
+    height: 297mm !important;
     margin: 0 !important;
     padding: 0 !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    overflow: hidden !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .a4-paper-sheet:last-child {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+  .a4-continuation-header,
+  .a4-continuation-notice,
+  .a4-footer-bar {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .a4-footer-bar {
+    display: flex !important;
+    height: 24px !important;
+    background-color: #181b20 !important;
+    flex-shrink: 0 !important;
   }
 }
 
