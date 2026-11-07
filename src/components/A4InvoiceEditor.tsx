@@ -7,11 +7,14 @@ import {
   fetchClinicInventory,
   promoteClinicItem,
   recordClinicItemUsage,
+  fetchClinicSignatures,
   type PatientItem,
   type HsnCodeItem,
   type ClinicInventoryItem,
+  type ClinicSignatureItem,
   FALLBACK_HSN_CODES,
 } from "../services/api";
+import { SignatureSettingsModal } from "./SignatureSettingsModal";
 import {
   searchMasterMedicines,
   suggestHsnCode,
@@ -24,11 +27,11 @@ import {
   Trash2,
   Phone,
   RotateCcw,
-  Sparkles,
   Search,
   RotateCw,
   ArrowRight,
   User,
+  PenTool,
 } from "lucide-react";
 
 export interface LineItem {
@@ -71,12 +74,12 @@ interface PaginatedSheet {
 }
 
 function paginateInvoiceItems(allItems: LineItem[]): PaginatedSheet[] {
-  const SINGLE_PAGE_MAX = 10;
+  const SINGLE_PAGE_MAX = 9;
   const PAGE_1_FULL_CAPACITY = 15;
   const INTERMEDIATE_CAPACITY = 14;
   const FINAL_PAGE_WITH_FOOTER_MAX = 10;
 
-  // 1. Single Page: Table + Full Header + Footer Section all fit on Page 1
+  // 1. Single Page: Table + Full Header + Footer Section all fit on Page 1 (up to 9 items)
   if (allItems.length <= SINGLE_PAGE_MAX) {
     return [
       {
@@ -91,7 +94,7 @@ function paginateInvoiceItems(allItems: LineItem[]): PaginatedSheet[] {
     ];
   }
 
-  // 2. Table fits on Page 1 (11 to 15 items), only Terms & Conditions/Totals jump to Page 2
+  // 2. Table fits on Page 1 (10 to 15 items), only Terms & Conditions/Totals jump to Page 2
   if (allItems.length <= PAGE_1_FULL_CAPACITY) {
     return [
       {
@@ -377,6 +380,42 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
     "cash" | "bank_transfer" | "debit" | "digital_wallet"
   >("cash");
   const [signatoryName, setSignatoryName] = useState("Dr. Pretheeksha");
+  const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+  const [activeSignature, setActiveSignature] = useState<ClinicSignatureItem | null>(null);
+
+  // Load doctor signatures from MongoDB on mount & restore system favorite
+  useEffect(() => {
+    fetchClinicSignatures().then((res) => {
+      if (res.data && res.data.length > 0) {
+        let localFavId: string | null = null;
+        try {
+          localFavId = localStorage.getItem("pretheeksha_system_fav_signature_id");
+        } catch {}
+
+        const fav =
+          (localFavId ? res.data.find((s) => s._id === localFavId) : null) ||
+          res.data.find((s) => s.isDefault) ||
+          res.data[0];
+
+        if (fav) {
+          setActiveSignature(fav);
+          if (fav.name) {
+            setSignatoryName(fav.name);
+          }
+        }
+      }
+    });
+  }, []);
+
+  const handleSelectSignature = (sig: ClinicSignatureItem) => {
+    setActiveSignature(sig);
+    if (sig.name) {
+      setSignatoryName(sig.name);
+    }
+    try {
+      localStorage.setItem("pretheeksha_system_fav_signature_id", sig._id);
+    } catch {}
+  };
 
   // Calculations: Subtotal + Line-item GST Sum = Grand Total
   const subtotal = items.reduce(
@@ -613,60 +652,16 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
     setSignatoryName("Dr. Pretheeksha");
   };
 
-  const handlePretheekshaPreset = () => {
-    setCompanyName("Pretheeksha Fertility Clinic");
-    setInvoiceSubtitle("INVOICE");
-    setCompanyPhone("+91 94470 12345");
-    setClientName("Ananya Sharma");
-    setClientAddress("TC 14/820, Medical College Road,\nTrivandrum, Kerala 695011");
-    setClientPhone("+91 98765 43210");
-    setInvoiceNo(`INV-${new Date().getFullYear()}-0842`);
-    setInvoiceDate(
-      new Date().toLocaleDateString("en-IN", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      })
-    );
-    setItems([
-      {
-        id: "1",
-        description: "IVF Stimulation Cycle Package",
-        hsnCode: "30043912",
-        qty: 1,
-        unitPrice: 85000,
-        gstRate: 12,
-        costPrice: 55000,
-        mrp: 90000,
-      },
-      {
-        id: "2",
-        description: "Follicular Monitoring Ultrasound Scan",
-        hsnCode: "90181200",
-        qty: 3,
-        unitPrice: 1200,
-        gstRate: 12,
-        costPrice: 400,
-        mrp: 1500,
-      },
-      {
-        id: "3",
-        description: "Susten 200 mg Capsule",
-        hsnCode: "30043919",
-        qty: 3,
-        unitPrice: 520,
-        gstRate: 12,
-        costPrice: 420,
-        mrp: 580,
-      },
-    ]);
-    setTerms("Payment is due upon receipt. Medical procedures and consumables are non-refundable.");
-    setPaymentMethod("bank_transfer");
-    setSignatoryName("Dr. Pretheeksha");
-  };
-
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    window.focus();
+    try {
+      // If running inside Tauri v2 desktop, attempt native webview print
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("plugin:webview|print");
+    } catch {
+      // Fallback to standard browser window.print()
+      window.print();
+    }
   };
 
   return (
@@ -675,9 +670,6 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
       <div className="sliding-panel-header">
         <div className="flex items-center gap-2">
           <span className="sliding-panel-title">Interactive A4 Invoice</span>
-          <span className="text-[11px] font-semibold text-neutral-500 bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 rounded-[4px]">
-            Live Editing
-          </span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -685,11 +677,11 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
             variant="outline"
             size="sm"
             className="h-8 px-2.5 text-xs rounded-[6px]"
-            onClick={handlePretheekshaPreset}
-            title="Load Clinic Template"
+            onClick={() => setIsSignatureModalOpen(true)}
+            title="Manage Doctor Signatures"
           >
-            <Sparkles className="h-3.5 w-3.5 mr-1 text-amber-500" />
-            <span>Clinic Preset</span>
+            <PenTool className="h-3.5 w-3.5 mr-1 text-sky-600 dark:text-sky-400" />
+            <span>Doctor Signature</span>
           </Button>
 
           <Button
@@ -1227,14 +1219,26 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
                         />
                       </div>
 
-                      <div className="a4-sig-graphic-wrap">
-                        <svg
-                          viewBox="0 0 160 50"
-                          className="h-10 text-[#1e2229] fill-none stroke-current"
-                          style={{ strokeWidth: 2.2, strokeLinecap: "round", strokeLinejoin: "round" }}
-                        >
-                          <path d="M 15 35 Q 30 35 40 35 L 50 35 L 55 12 L 62 44 L 70 20 L 78 40 L 84 28 L 92 36 L 104 35 Q 120 35 145 35" />
-                        </svg>
+                      <div
+                        className="a4-sig-graphic-wrap cursor-pointer group"
+                        onClick={() => setIsSignatureModalOpen(true)}
+                        title="Click to select or change doctor signature"
+                      >
+                        {activeSignature?.signatureData ? (
+                          <img
+                            src={activeSignature.signatureData}
+                            alt={activeSignature.name}
+                            className="max-h-12 max-w-[170px] object-contain select-none pointer-events-none"
+                          />
+                        ) : (
+                          <svg
+                            viewBox="0 0 160 50"
+                            className="h-10 text-[#1e2229] fill-none stroke-current"
+                            style={{ strokeWidth: 2.2, strokeLinecap: "round", strokeLinejoin: "round" }}
+                          >
+                            <path d="M 15 35 Q 30 35 40 35 L 50 35 L 55 12 L 62 44 L 70 20 L 78 40 L 84 28 L 92 36 L 104 35 Q 120 35 145 35" />
+                          </svg>
+                        )}
                       </div>
 
                       <div className="a4-sig-line" />
@@ -1595,6 +1599,14 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Doctor Signature Settings Modal */}
+      <SignatureSettingsModal
+        isOpen={isSignatureModalOpen}
+        onClose={() => setIsSignatureModalOpen(false)}
+        activeSignatureId={activeSignature?._id}
+        onSelectSignature={handleSelectSignature}
+      />
     </div>
   );
 };

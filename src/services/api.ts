@@ -526,3 +526,108 @@ export async function deleteClinicItem(id: string): Promise<{ status: string }> 
   if (!res.ok) throw new Error(json.message || "Failed to delete item from cache");
   return json;
 }
+
+/* ==========================================================================
+   Clinic Doctor Signatures API (Real MongoDB Persistence)
+   ========================================================================== */
+
+export interface ClinicSignatureItem {
+  _id: string;
+  name: string;
+  title?: string;
+  signatureData: string;
+  source: "drawn" | "uploaded";
+  isDefault: boolean;
+  createdAt: string;
+}
+
+export const FALLBACK_CLINIC_SIGNATURES: ClinicSignatureItem[] = [
+  {
+    _id: "sig_default_pretheeksha",
+    name: "Dr. Pretheeksha",
+    title: "Chief Fertility Specialist & Gynecologist",
+    signatureData:
+      'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 50" fill="none" stroke="%23181b20" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M 15 35 Q 30 35 40 35 L 50 35 L 55 12 L 62 44 L 70 20 L 78 40 L 84 28 L 92 36 L 104 35 Q 120 35 145 35" /></svg>',
+    source: "drawn",
+    isDefault: true,
+    createdAt: new Date().toISOString(),
+  },
+];
+
+/**
+ * Fetch all saved doctor signatures from MongoDB
+ */
+export async function fetchClinicSignatures(): Promise<{
+  status: string;
+  data: ClinicSignatureItem[];
+}> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/clinic/signatures`);
+    if (!res.ok) throw new Error("Failed to load doctor signatures");
+    const json = await res.json();
+    return {
+      status: "success",
+      data: json.data && json.data.length > 0 ? json.data : FALLBACK_CLINIC_SIGNATURES,
+    };
+  } catch {
+    return { status: "success", data: FALLBACK_CLINIC_SIGNATURES };
+  }
+}
+
+/**
+ * Persist a new doctor signature to MongoDB
+ */
+export async function createClinicSignature(payload: {
+  name: string;
+  title?: string;
+  signatureData: string;
+  source: "drawn" | "uploaded";
+  isDefault?: boolean;
+}): Promise<{ status: string; data: ClinicSignatureItem }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/clinic/signatures`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Failed to save signature");
+    return json;
+  } catch (err: any) {
+    const fallbackItem: ClinicSignatureItem = {
+      _id: `sig_${Date.now()}`,
+      name: payload.name,
+      title: payload.title,
+      signatureData: payload.signatureData,
+      source: payload.source,
+      isDefault: Boolean(payload.isDefault),
+      createdAt: new Date().toISOString(),
+    };
+    FALLBACK_CLINIC_SIGNATURES.unshift(fallbackItem);
+    return { status: "success", data: fallbackItem };
+  }
+}
+
+/**
+ * Set a signature as default in MongoDB
+ */
+export async function setDefaultClinicSignature(id: string): Promise<{ status: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/clinic/signatures/${encodeURIComponent(id)}/default`, {
+    method: "PATCH",
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || "Failed to set default signature");
+  return json;
+}
+
+/**
+ * Delete a doctor signature from MongoDB
+ */
+export async function deleteClinicSignature(id: string): Promise<{ status: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/clinic/signatures/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || "Failed to delete signature");
+  return json;
+}

@@ -3528,6 +3528,19 @@ button.btn-secondary:hover {
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: opacity 0.15s ease;
+}
+
+.a4-sig-graphic-wrap:hover {
+  opacity: 0.85;
+}
+
+.a4-sig-graphic-wrap img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .a4-sig-line {
@@ -3569,40 +3582,77 @@ button.btn-secondary:hover {
 
 /* Print Rules */
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html,
+  body,
+  #root,
+  .app-container,
+  .main-viewport,
+  .main-content-scrollable,
+  .invoices-manager-wrapper {
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    position: static !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+    display: block !important;
+  }
+
   .app-sidebar,
   .app-top-header,
   .sliding-panel-header,
   .a4-row-delete-btn,
   .a4-row-delete-hover-btn,
   .a4-add-row-bar,
-  .a4-table-actions-bar button,
-  .a4-summary-page-banner button,
+  .a4-table-actions-bar,
+  .a4-summary-page-banner,
   .a4-search-patient-btn,
+  .invoices-content,
   .invoices-manager-wrapper > *:not(.invoice-create-sliding-panel) {
     display: none !important;
   }
+
   .invoice-create-sliding-panel {
     position: static !important;
     animation: none !important;
     box-shadow: none !important;
     border: none !important;
     width: 100% !important;
-    height: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
     overflow: visible !important;
-  }
-  .a4-document-workbench {
     padding: 0 !important;
-    gap: 0 !important;
+    margin: 0 !important;
     background: transparent !important;
     display: block !important;
   }
+
+  .a4-document-workbench {
+    padding: 0 !important;
+    margin: 0 !important;
+    gap: 0 !important;
+    background: transparent !important;
+    display: block !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
   .a4-paper-sheet {
     box-shadow: none !important;
     border: none !important;
     width: 210mm !important;
     min-height: 297mm !important;
     height: 297mm !important;
-    margin: 0 !important;
+    max-height: 297mm !important;
+    margin: 0 auto !important;
     padding: 0 !important;
     page-break-after: always !important;
     break-after: page !important;
@@ -3612,22 +3662,38 @@ button.btn-secondary:hover {
     overflow: hidden !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    background: #ffffff !important;
   }
+
   .a4-paper-sheet:last-child {
     page-break-after: avoid !important;
     break-after: avoid !important;
   }
+
   .a4-continuation-header,
   .a4-continuation-notice,
   .a4-footer-bar {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+
   .a4-footer-bar {
     display: flex !important;
     height: 24px !important;
     background-color: #181b20 !important;
     flex-shrink: 0 !important;
+  }
+
+  .a4-table-input,
+  .a4-company-name-input,
+  .a4-header-phone-input,
+  .a4-invoice-badge-input,
+  .a4-meta-field-input,
+  .a4-meta-field-textarea {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
   }
 }
 
