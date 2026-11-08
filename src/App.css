@@ -2776,205 +2776,178 @@ button.btn-secondary:hover {
   color: #0284c7;
 }
 
-/* Header Hospital Clean Block (50% reduced height, no dark fill, bluish bold underline) */
-.a4-header-block {
-  background-color: transparent;
-  color: #181b20;
-  padding: 16px 40px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  border-bottom: 3.5px solid #0284c7;
-}
-
-.a4-brand-group {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.a4-logo-title-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.a4-logo-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 4px;
-  background-color: #0284c7;
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 16px;
-  flex-shrink: 0;
-}
-
-.a4-company-name-wrap {
+/* ==========================================================================
+   Modern Clean Invoice Header (Reference Layout)
+   ========================================================================== */
+.a4-modern-header-zone {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 24px;
+  padding: 32px 40px 16px 40px;
 }
 
-.a4-company-name-input {
-  background: transparent;
-  border: none;
-  font-size: 18px;
-  font-weight: 700;
-  color: #0f172a;
-  padding: 0;
-  outline: none;
-  width: 320px;
-  letter-spacing: -0.3px;
+.a4-modern-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
 }
 
-.a4-company-sub-input {
-  background: transparent;
-  border: none;
-  font-size: 11px;
+.a4-modern-logo-wrap {
+  max-width: 220px;
+  max-height: 85px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.a4-modern-logo-wrap img {
+  max-height: 80px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.a4-modern-title-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  gap: 10px;
+}
+
+.a4-modern-invoice-title-input {
+  font-size: 32px;
   font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #0284c7;
-  padding: 0;
+  color: #09090b;
+  letter-spacing: -0.03em;
+  text-align: right;
+  background: transparent;
+  border: none;
   outline: none;
+  padding: 0;
+  width: 280px;
+}
+
+.a4-modern-meta-table {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.a4-modern-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  white-space: nowrap;
+}
+
+.a4-modern-meta-label {
+  color: #64748b;
+  font-weight: 400;
+  min-width: 85px;
+  text-align: right;
+}
+
+.a4-modern-meta-val-input {
+  color: #09090b;
+  font-weight: 600;
+  text-align: right;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 1px 0;
+  white-space: nowrap;
   width: 140px;
 }
 
-.a4-header-right-phone {
+.a4-modern-parties-row {
   display: flex;
-  align-items: center;
-  gap: 4px;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 32px;
   font-size: 13px;
-  font-weight: 600;
-  color: #0f172a;
+  line-height: 1.5;
 }
 
-.a4-header-phone-input {
+.a4-party-block {
+  flex: 1;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.a4-party-block.align-right {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.a4-party-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #09090b;
+  margin-bottom: 4px;
+}
+
+.a4-party-name-input {
+  font-size: 16px;
+  font-weight: 800;
+  color: #09090b;
   background: transparent;
   border: none;
-  font-size: 13px;
-  font-weight: 600;
-  color: #0f172a;
-  text-align: left;
-  padding: 0;
   outline: none;
-  width: 135px;
+  padding: 0;
+  width: 100%;
+  margin-bottom: 2px;
+}
+
+.a4-party-input {
+  font-size: 13px;
+  color: #334155;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0;
+  width: 100%;
+}
+
+.a4-party-textarea {
+  font-size: 13px;
+  color: #334155;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0;
+  width: 100%;
+  resize: none;
+  line-height: 1.4;
+}
+
+.a4-party-input:hover,
+.a4-party-textarea:hover,
+.a4-party-name-input:hover,
+.a4-modern-meta-val-input:hover,
+.a4-modern-invoice-title-input:hover {
+  border-bottom: 1px dashed #cbd5e1;
+}
+
+.a4-party-input:focus,
+.a4-party-textarea:focus,
+.a4-party-name-input:focus,
+.a4-modern-meta-val-input:focus,
+.a4-modern-invoice-title-input:focus {
+  border-bottom: 1px solid #09090b;
 }
 
 /* Document Inner Body (balanced padding with airy breathing room) */
 .a4-document-body {
-  padding: 24px 40px 20px 40px;
+  padding: 8px 40px 20px 40px;
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 24px;
-}
-
-/* Bill To & Invoice Meta Row */
-.a4-meta-boxes-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 40px;
-  align-items: flex-start;
-  margin-top: 6px;
-  margin-bottom: 10px;
-}
-
-.a4-meta-box-col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.a4-bill-to-title {
-  font-size: 14px;
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: -0.2px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-}
-
-.a4-invoice-badge-box {
-  display: inline-flex;
-  align-items: center;
-  border: 1.5px solid #0f172a;
-  border-radius: 4px;
-  padding: 0 10px;
-  background-color: transparent;
-  font-weight: 800;
-  font-size: 13px;
-  color: #0f172a;
-  height: 26px;
-  align-self: flex-start;
-  box-sizing: border-box;
-  gap: 1px;
-}
-
-.a4-invoice-hash {
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.a4-invoice-badge-input {
-  background: transparent;
-  border: none;
-  outline: none;
-  font-weight: 800;
-  font-size: 13px;
-  color: #0f172a;
-  width: 110px;
-  padding: 0;
-}
-
-.a4-meta-fields-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 13px;
-  padding-left: 14px;
-}
-
-.a4-meta-field-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.a4-meta-field-label {
-  font-weight: 700;
-  color: #1e2229;
-  min-width: 65px;
-}
-
-.a4-meta-field-colon {
-  font-weight: 700;
-  color: #1e2229;
-}
-
-.a4-meta-field-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  border-bottom: 1px dashed transparent;
-  font-size: 13px;
-  color: #181b20;
-  padding: 1px 4px;
-  outline: none;
-  transition: all 0.15s ease;
-}
-
-.a4-meta-field-input:hover,
-.a4-meta-field-input:focus {
-  border-bottom-color: #a1a1aa;
-  background-color: #f4f4f5;
 }
 
 .a4-search-patient-btn {
@@ -3684,12 +3657,13 @@ button.btn-secondary:hover {
     flex-shrink: 0 !important;
   }
 
+  .a4-modern-invoice-title-input,
+  .a4-modern-meta-val-input,
+  .a4-party-name-input,
+  .a4-party-input,
+  .a4-party-textarea,
   .a4-table-input,
-  .a4-company-name-input,
-  .a4-header-phone-input,
-  .a4-invoice-badge-input,
-  .a4-meta-field-input,
-  .a4-meta-field-textarea {
+  .a4-signatory-name-input {
     border: none !important;
     background: transparent !important;
     box-shadow: none !important;

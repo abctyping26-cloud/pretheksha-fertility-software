@@ -25,7 +25,6 @@ import {
   Printer,
   Plus,
   Trash2,
-  Phone,
   RotateCcw,
   Search,
   RotateCw,
@@ -164,25 +163,70 @@ function paginateInvoiceItems(allItems: LineItem[]): PaginatedSheet[] {
 }
 
 export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => {
-  // Brand Header State
-  const [companyName, setCompanyName] = useState("Pretheeksha Fertility Clinic");
-  const [invoiceSubtitle, setInvoiceSubtitle] = useState("INVOICE");
-  const [companyPhone, setCompanyPhone] = useState("+91 94470 12345");
+  // Clinic Logo & System Defaults (from localStorage)
+  const [clinicLogo] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem("pretheeksha_clinic_logo");
+    } catch {
+      return null;
+    }
+  });
 
-  // Client & Meta State (clean empty defaults)
-  const [clientName, setClientName] = useState("");
-  const [clientAddress, setClientAddress] = useState("");
-  const [clientPhone, setClientPhone] = useState("");
+  const clinicDefaults = (() => {
+    try {
+      const saved = localStorage.getItem("pretheeksha_clinic_info");
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  })();
+
+  // From (Clinic) State
+  const [fromClinicName, setFromClinicName] = useState(
+    () => clinicDefaults?.clinicName || "Pretheeksha Fertility Clinic"
+  );
+  const [fromDoctor, setFromDoctor] = useState(
+    () => clinicDefaults?.contactPerson || "Dr. Pretheeksha"
+  );
+  const [fromEmail, setFromEmail] = useState(
+    () => clinicDefaults?.email || "info@pretheekshafertility.com"
+  );
+  const [fromPhone, setFromPhone] = useState(
+    () => clinicDefaults?.phone || "+91 94470 12345"
+  );
+  const [fromWebsite, setFromWebsite] = useState(
+    () => clinicDefaults?.website || "pretheekshafertility.com"
+  );
+  const [fromAddress, setFromAddress] = useState(
+    () => clinicDefaults?.address || "Medical College Road, Trivandrum, Kerala 695011"
+  );
+
+  // Invoice Title & Meta State
+  const [invoiceTitle, setInvoiceTitle] = useState("Invoice");
   const [invoiceNo, setInvoiceNo] = useState(
     () => `INV-${new Date().getFullYear()}-0001`
   );
   const [invoiceDate, setInvoiceDate] = useState(() =>
     new Date().toLocaleDateString("en-US", {
-      month: "long",
+      month: "short",
       day: "numeric",
       year: "numeric",
     })
   );
+  const [invoiceDueDate, setInvoiceDueDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 15);
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  });
+
+  // Client & Meta State (clean empty defaults)
+  const [clientName, setClientName] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [clientAddress, setClientAddress] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
 
   // Patient Database Search State
   const [isPatientSearchOpen, setIsPatientSearchOpen] = useState(false);
@@ -368,6 +412,8 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
       patient.phones?.[0]?.e164 ||
       "";
     setClientPhone(primaryPhone);
+
+    setClientEmail(patient.email || "");
 
     setIsPatientSearchOpen(false);
   };
@@ -632,16 +678,30 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
   };
 
   const handleReset = () => {
-    setCompanyName("Pretheeksha Fertility Clinic");
-    setInvoiceSubtitle("INVOICE");
-    setCompanyPhone("+91 94470 12345");
+    setFromClinicName(clinicDefaults?.clinicName || "Pretheeksha Fertility Clinic");
+    setFromDoctor(clinicDefaults?.contactPerson || "Dr. Pretheeksha");
+    setFromEmail(clinicDefaults?.email || "info@pretheekshafertility.com");
+    setFromPhone(clinicDefaults?.phone || "+91 94470 12345");
+    setFromWebsite(clinicDefaults?.website || "pretheekshafertility.com");
+    setFromAddress(clinicDefaults?.address || "Medical College Road, Trivandrum, Kerala 695011");
+    setInvoiceTitle("Invoice");
     setClientName("");
+    setClientEmail("");
     setClientAddress("");
     setClientPhone("");
     setInvoiceNo(`INV-${new Date().getFullYear()}-0001`);
     setInvoiceDate(
       new Date().toLocaleDateString("en-US", {
-        month: "long",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    );
+    const d = new Date();
+    d.setDate(d.getDate() + 15);
+    setInvoiceDueDate(
+      d.toLocaleDateString("en-US", {
+        month: "short",
         day: "numeric",
         year: "numeric",
       })
@@ -720,41 +780,171 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
       <div className="a4-document-workbench">
         {sheets.map((sheet) => (
           <div key={`sheet_${sheet.pageIndex}`} className="a4-paper-sheet">
-            {/* 1. Header Block (Full on Page 1, Compact on Page 2+) */}
+            {/* 1. Header Block (Full Modern Header on Page 1, Compact on Page 2+) */}
             {sheet.isFirstPage ? (
-              <div className="a4-header-block">
-                <div className="a4-brand-group">
-                  <div className="a4-logo-title-row">
-                    <div className="a4-logo-icon">P</div>
-                    <div className="a4-company-name-wrap">
-                      <input
-                        type="text"
-                        className="a4-company-name-input"
-                        value={companyName}
-                        onChange={(e) => setCompanyName(e.target.value)}
-                        title="Edit Clinic Name"
-                      />
-                      <input
-                        type="text"
-                        className="a4-company-sub-input"
-                        value={invoiceSubtitle}
-                        onChange={(e) => setInvoiceSubtitle(e.target.value)}
-                        title="Edit Subtitle"
-                        placeholder="INVOICE"
-                      />
+              <div className="a4-modern-header-zone">
+                {/* Upper Row: Logo on Left, Title + Meta on Right */}
+                <div className="a4-modern-header-top">
+                  <div className="a4-modern-logo-wrap">
+                    {clinicLogo ? (
+                      <img src={clinicLogo} alt={fromClinicName} />
+                    ) : (
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-14 w-14 rounded-[8px] bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 flex items-center justify-center font-extrabold text-2xl tracking-tighter shadow-xs">
+                          P
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="font-extrabold text-base tracking-tight text-neutral-900 dark:text-neutral-100 leading-tight">
+                            PRETHEEKSHA
+                          </span>
+                          <span className="text-[10px] font-bold text-neutral-400 tracking-widest uppercase">
+                            Fertility Clinic
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="a4-modern-title-meta">
+                    <input
+                      type="text"
+                      className="a4-modern-invoice-title-input"
+                      value={invoiceTitle}
+                      onChange={(e) => setInvoiceTitle(e.target.value)}
+                      placeholder="Invoice"
+                    />
+
+                    <div className="a4-modern-meta-table">
+                      <div className="a4-modern-meta-row">
+                        <span className="a4-modern-meta-label">Invoice no.:</span>
+                        <input
+                          type="text"
+                          className="a4-modern-meta-val-input font-bold"
+                          value={invoiceNo}
+                          onChange={(e) => setInvoiceNo(e.target.value)}
+                          placeholder="001"
+                        />
+                      </div>
+
+                      <div className="a4-modern-meta-row">
+                        <span className="a4-modern-meta-label">Invoice date:</span>
+                        <input
+                          type="text"
+                          className="a4-modern-meta-val-input"
+                          value={invoiceDate}
+                          onChange={(e) => setInvoiceDate(e.target.value)}
+                          placeholder="Nov 8th, 2026"
+                        />
+                      </div>
+
+                      <div className="a4-modern-meta-row">
+                        <span className="a4-modern-meta-label">Due:</span>
+                        <input
+                          type="text"
+                          className="a4-modern-meta-val-input"
+                          value={invoiceDueDate}
+                          onChange={(e) => setInvoiceDueDate(e.target.value)}
+                          placeholder="Nov 23rd, 2026"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="a4-header-right-phone">
-                  <Phone className="h-3.5 w-3.5 text-[#0284c7] shrink-0" />
-                  <input
-                    type="text"
-                    className="a4-header-phone-input"
-                    value={companyPhone}
-                    onChange={(e) => setCompanyPhone(e.target.value)}
-                    placeholder="Phone number"
-                  />
+                {/* Lower Row: From (Left) & Bill to (Right) */}
+                <div className="a4-modern-parties-row">
+                  {/* From Section */}
+                  <div className="a4-party-block">
+                    <div className="a4-party-label">From</div>
+                    <input
+                      type="text"
+                      className="a4-party-name-input"
+                      value={fromClinicName}
+                      onChange={(e) => setFromClinicName(e.target.value)}
+                      placeholder="Clinic Name"
+                    />
+                    <input
+                      type="text"
+                      className="a4-party-input"
+                      value={fromDoctor}
+                      onChange={(e) => setFromDoctor(e.target.value)}
+                      placeholder="Doctor / Signatory"
+                    />
+                    <input
+                      type="email"
+                      className="a4-party-input"
+                      value={fromEmail}
+                      onChange={(e) => setFromEmail(e.target.value)}
+                      placeholder="Email address"
+                    />
+                    <input
+                      type="text"
+                      className="a4-party-input"
+                      value={fromPhone}
+                      onChange={(e) => setFromPhone(e.target.value)}
+                      placeholder="Phone number"
+                    />
+                    <input
+                      type="text"
+                      className="a4-party-input"
+                      value={fromWebsite}
+                      onChange={(e) => setFromWebsite(e.target.value)}
+                      placeholder="Website"
+                    />
+                    <textarea
+                      rows={2}
+                      className="a4-party-textarea"
+                      value={fromAddress}
+                      onChange={(e) => setFromAddress(e.target.value)}
+                      placeholder="Clinic Address"
+                    />
+                  </div>
+
+                  {/* Bill to Section */}
+                  <div className="a4-party-block align-right">
+                    <div className="a4-party-label">Bill to</div>
+                    <div className="flex items-center justify-end gap-1.5 w-full">
+                      <button
+                        type="button"
+                        className="a4-search-patient-btn p-1 rounded-[3px] text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors"
+                        onClick={() => {
+                          setPatientSearchTerm(clientName);
+                          setIsPatientSearchOpen(true);
+                        }}
+                        title="Search Patient in Database"
+                      >
+                        <Search className="h-3.5 w-3.5" />
+                      </button>
+                      <input
+                        type="text"
+                        className="a4-party-name-input text-right"
+                        value={clientName}
+                        onChange={(e) => setClientName(e.target.value)}
+                        placeholder="Patient Name"
+                      />
+                    </div>
+                    <input
+                      type="email"
+                      className="a4-party-input text-right"
+                      value={clientEmail}
+                      onChange={(e) => setClientEmail(e.target.value)}
+                      placeholder="patient@mail.com"
+                    />
+                    <input
+                      type="text"
+                      className="a4-party-input text-right"
+                      value={clientPhone}
+                      onChange={(e) => setClientPhone(e.target.value)}
+                      placeholder="Phone number"
+                    />
+                    <textarea
+                      rows={2}
+                      className="a4-party-textarea text-right"
+                      value={clientAddress}
+                      onChange={(e) => setClientAddress(e.target.value)}
+                      placeholder="Patient Address"
+                    />
+                  </div>
                 </div>
               </div>
             ) : (
@@ -762,7 +952,7 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
                 <div className="a4-continuation-brand">
                   <div className="a4-continuation-logo">P</div>
                   <div>
-                    <div className="a4-continuation-title">{companyName}</div>
+                    <div className="a4-continuation-title">{fromClinicName}</div>
                     <div className="a4-continuation-sub">Invoice #{invoiceNo} (Continuation)</div>
                   </div>
                 </div>
@@ -779,90 +969,6 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
 
             {/* 2. Main Content Body */}
             <div className="a4-document-body">
-              {/* Meta Section (Bill To & Invoice Details - only on Page 1) */}
-              {sheet.isFirstPage && (
-                <div className="a4-meta-boxes-row">
-                  {/* Left Column: Bill To */}
-                  <div className="a4-meta-box-col">
-                    <div className="a4-bill-to-title">Bill To:</div>
-                    <div className="a4-meta-fields-list">
-                      <div className="a4-meta-field-row">
-                        <span className="a4-meta-field-label">Name</span>
-                        <span className="a4-meta-field-colon">:</span>
-                        <div className="flex-1 flex items-center gap-1.5">
-                          <input
-                            type="text"
-                            className="a4-meta-field-input font-medium"
-                            value={clientName}
-                            onChange={(e) => setClientName(e.target.value)}
-                            placeholder="Search or enter patient name..."
-                          />
-                          <button
-                            type="button"
-                            className="a4-search-patient-btn"
-                            onClick={() => {
-                              setPatientSearchTerm(clientName);
-                              setIsPatientSearchOpen(true);
-                            }}
-                            title="Search Patient in Database"
-                          >
-                            <Search className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="a4-meta-field-row">
-                        <span className="a4-meta-field-label">Address</span>
-                        <span className="a4-meta-field-colon">:</span>
-                        <textarea
-                          rows={2}
-                          className="a4-meta-field-input resize-none"
-                          value={clientAddress}
-                          onChange={(e) => setClientAddress(e.target.value)}
-                          placeholder="Street, City, Postal Code"
-                        />
-                      </div>
-                      <div className="a4-meta-field-row">
-                        <span className="a4-meta-field-label">Phone</span>
-                        <span className="a4-meta-field-colon">:</span>
-                        <input
-                          type="text"
-                          className="a4-meta-field-input"
-                          value={clientPhone}
-                          onChange={(e) => setClientPhone(e.target.value)}
-                          placeholder="Phone number"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Column: Invoice ID & Meta */}
-                  <div className="a4-meta-box-col">
-                    <div className="a4-invoice-badge-box">
-                      <span className="a4-invoice-hash">#</span>
-                      <input
-                        type="text"
-                        value={invoiceNo}
-                        onChange={(e) => setInvoiceNo(e.target.value)}
-                        className="a4-invoice-badge-input"
-                        placeholder={`INV-${new Date().getFullYear()}-0001`}
-                      />
-                    </div>
-                    <div className="a4-meta-fields-list">
-                      <div className="a4-meta-field-row">
-                        <span className="a4-meta-field-label">Date</span>
-                        <span className="a4-meta-field-colon">:</span>
-                        <input
-                          type="text"
-                          className="a4-meta-field-input"
-                          value={invoiceDate}
-                          onChange={(e) => setInvoiceDate(e.target.value)}
-                          placeholder="Invoice Date"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* Line Items Table with HSN & GST % columns (when this sheet has a table) */}
               {sheet.hasTable && (

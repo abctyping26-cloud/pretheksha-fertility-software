@@ -30,10 +30,82 @@ import {
   Upload,
   FileSpreadsheet,
   Package,
+  FileText,
+  Image,
+  Building2,
 } from "lucide-react";
 
 export const SettingsManager: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"hsn" | "master" | "cache">("hsn");
+  const [activeTab, setActiveTab] = useState<"invoice" | "hsn" | "master" | "cache">("invoice");
+
+  // Invoice & Branding State (System / LocalStorage)
+  const [clinicLogo, setClinicLogo] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem("pretheeksha_clinic_logo");
+    } catch {
+      return null;
+    }
+  });
+
+  const [clinicDetails, setClinicDetails] = useState(() => {
+    try {
+      const saved = localStorage.getItem("pretheeksha_clinic_info");
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      clinicName: "Pretheeksha Fertility Clinic",
+      contactPerson: "Dr. Pretheeksha",
+      email: "info@pretheekshafertility.com",
+      phone: "+91 94470 12345",
+      website: "pretheekshafertility.com",
+      address: "Medical College Road, Trivandrum, Kerala 695011",
+    };
+  });
+
+  const [logoSaveSuccess, setLogoSaveSuccess] = useState(false);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Logo image must be smaller than 5MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setClinicLogo(dataUrl);
+        try {
+          localStorage.setItem("pretheeksha_clinic_logo", dataUrl);
+          setLogoSaveSuccess(true);
+          setTimeout(() => setLogoSaveSuccess(false), 2500);
+        } catch (err) {
+          console.error("Failed to save logo to localStorage", err);
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveLogo = () => {
+    if (!confirm("Are you sure you want to remove the clinic logo?")) return;
+    setClinicLogo(null);
+    try {
+      localStorage.removeItem("pretheeksha_clinic_logo");
+    } catch {}
+  };
+
+  const handleSaveClinicDetails = (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      localStorage.setItem("pretheeksha_clinic_info", JSON.stringify(clinicDetails));
+      setLogoSaveSuccess(true);
+      setTimeout(() => setLogoSaveSuccess(false), 2500);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   // HSN State
   const [hsnList, setHsnList] = useState<HsnCodeItem[]>(FALLBACK_HSN_CODES);
@@ -258,50 +330,260 @@ export const SettingsManager: React.FC = () => {
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100">
-            Pharmacy, HSN &amp; Inventory Settings
-          </h1>
-          <p className="text-xs text-neutral-500 mt-1">
-            Manage HSN codes, A-to-Z medicines catalog, and Tier-1 clinic database cache with 3-tier pricing.
-          </p>
+    <div className="flex h-full w-full max-w-[1400px] mx-auto min-h-[calc(100vh-64px)]">
+      {/* Borderless Internal Left Sidebar */}
+      <aside className="w-60 shrink-0 py-6 pr-4 pl-3 space-y-4 select-none">
+        <div className="space-y-4">
+          {/* SECTION: BILLING & INVOICES */}
+          <div className="space-y-1">
+            <div className="px-3 text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider">
+              Billing &amp; Invoice
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab("invoice")}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-[6px] text-xs font-semibold transition-all ${
+                activeTab === "invoice"
+                  ? "bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 shadow-sm"
+                  : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100/80 dark:hover:bg-neutral-800/60"
+              }`}
+            >
+              <FileText className="h-4 w-4 shrink-0" />
+              <span>Invoice &amp; Branding</span>
+            </button>
+          </div>
+
+          {/* SECTION: PHARMACY & INVENTORY */}
+          <div className="space-y-1">
+            <div className="px-3 text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider">
+              Pharmacy &amp; Inventory
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab("hsn")}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-[6px] text-xs font-semibold transition-all ${
+                activeTab === "hsn"
+                  ? "bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 shadow-sm"
+                  : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100/80 dark:hover:bg-neutral-800/60"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Tag className="h-4 w-4 shrink-0" />
+                <span>HSN Tax Codes</span>
+              </div>
+              <span className="text-[10px] opacity-70">{hsnList.length}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("master")}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-[6px] text-xs font-semibold transition-all ${
+                activeTab === "master"
+                  ? "bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 shadow-sm"
+                  : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100/80 dark:hover:bg-neutral-800/60"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <FileSpreadsheet className="h-4 w-4 shrink-0" />
+                <span>Master Catalog</span>
+              </div>
+              <span className="text-[10px] opacity-70">254k</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("cache")}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-[6px] text-xs font-semibold transition-all ${
+                activeTab === "cache"
+                  ? "bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 shadow-sm"
+                  : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100/80 dark:hover:bg-neutral-800/60"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Database className="h-4 w-4 shrink-0" />
+                <span>Clinic DB Cache</span>
+              </div>
+              <span className="text-[10px] opacity-70">{cachedItems.length}</span>
+            </button>
+          </div>
         </div>
+      </aside>
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant={activeTab === "hsn" ? "default" : "outline"}
-            size="sm"
-            className="rounded-[6px] text-xs h-8"
-            onClick={() => setActiveTab("hsn")}
-          >
-            <Tag className="h-3.5 w-3.5 mr-1" />
-            <span>HSN Tax Codes ({hsnList.length})</span>
-          </Button>
+      {/* Main Content Pane (No wall border) */}
+      <main className="flex-1 py-6 pl-4 pr-6 min-w-0 space-y-5">
+        {/* TAB 0: INVOICE & BRANDING */}
+        {activeTab === "invoice" && (
+          <div className="space-y-5">
+            {/* Logo Card */}
+            <Card className="rounded-[6px] border border-neutral-200 dark:border-neutral-800 p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
+                    <Image className="h-4 w-4 text-[#0284c7]" />
+                    <span>Clinic Invoice Logo</span>
+                  </h2>
+                </div>
 
-          <Button
-            variant={activeTab === "master" ? "default" : "outline"}
-            size="sm"
-            className="rounded-[6px] text-xs h-8"
-            onClick={() => setActiveTab("master")}
-          >
-            <FileSpreadsheet className="h-3.5 w-3.5 mr-1" />
-            <span>Master Catalog (254k)</span>
-          </Button>
+                {clinicLogo && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRemoveLogo}
+                    className="h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-[4px]"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    <span>Remove Logo</span>
+                  </Button>
+                )}
+              </div>
 
-          <Button
-            variant={activeTab === "cache" ? "default" : "outline"}
-            size="sm"
-            className="rounded-[6px] text-xs h-8"
-            onClick={() => setActiveTab("cache")}
-          >
-            <Database className="h-3.5 w-3.5 mr-1" />
-            <span>Clinic DB Cache ({cachedItems.length})</span>
-          </Button>
-        </div>
-      </div>
+              <div className="flex flex-col sm:flex-row items-center gap-6 p-4 rounded-[6px] border border-dashed border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30">
+                <div className="h-24 w-44 flex items-center justify-center bg-white dark:bg-neutral-950 rounded-[4px] border border-neutral-200 dark:border-neutral-800 p-2 shadow-xs shrink-0 overflow-hidden">
+                  {clinicLogo ? (
+                    <img
+                      src={clinicLogo}
+                      alt="Clinic Logo Preview"
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-neutral-400 gap-1 text-center">
+                      <Image className="h-8 w-8 text-neutral-300 dark:text-neutral-700" />
+                      <span className="text-[10px] font-medium">Default Emblem</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2 w-full">
+                  <div className="flex items-center gap-3">
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                        className="hidden"
+                        onChange={handleLogoUpload}
+                      />
+                      <span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-[4px] bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 text-xs font-semibold hover:opacity-90 transition-opacity cursor-pointer">
+                        <Upload className="h-3.5 w-3.5" />
+                        <span>{clinicLogo ? "Change Logo" : "Upload Clinic Logo"}</span>
+                      </span>
+                    </label>
+                    {logoSaveSuccess && (
+                      <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                        <Check className="h-3.5 w-3.5" /> Saved to system
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-neutral-400">
+                    Recommended format: PNG, JPG, or SVG up to 5MB. Rendered directly on invoice header.
+                  </span>
+                </div>
+              </div>
+            </Card>
+
+            {/* Default Clinic From Info Card */}
+            <Card className="rounded-[6px] border border-neutral-200 dark:border-neutral-800 p-5 space-y-4">
+              <div>
+                <h2 className="text-sm font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-[#0284c7]" />
+                  <span>Default Clinic Details ("From" Header)</span>
+                </h2>
+              </div>
+
+              <form onSubmit={handleSaveClinicDetails} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                      Clinic Name
+                    </label>
+                    <input
+                      type="text"
+                      value={clinicDetails.clinicName}
+                      onChange={(e) => setClinicDetails({ ...clinicDetails, clinicName: e.target.value })}
+                      className="h-8 text-xs px-3 rounded-[4px] border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900"
+                      placeholder="e.g. Pretheeksha Fertility Clinic"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                      Signatory / Doctor
+                    </label>
+                    <input
+                      type="text"
+                      value={clinicDetails.contactPerson}
+                      onChange={(e) => setClinicDetails({ ...clinicDetails, contactPerson: e.target.value })}
+                      className="h-8 text-xs px-3 rounded-[4px] border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900"
+                      placeholder="e.g. Dr. Pretheeksha"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={clinicDetails.email}
+                      onChange={(e) => setClinicDetails({ ...clinicDetails, email: e.target.value })}
+                      className="h-8 text-xs px-3 rounded-[4px] border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900"
+                      placeholder="e.g. info@pretheekshafertility.com"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                      Phone Number
+                    </label>
+                    <input
+                      type="text"
+                      value={clinicDetails.phone}
+                      onChange={(e) => setClinicDetails({ ...clinicDetails, phone: e.target.value })}
+                      className="h-8 text-xs px-3 rounded-[4px] border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900"
+                      placeholder="e.g. +91 94470 12345"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                      Website URL
+                    </label>
+                    <input
+                      type="text"
+                      value={clinicDetails.website}
+                      onChange={(e) => setClinicDetails({ ...clinicDetails, website: e.target.value })}
+                      className="h-8 text-xs px-3 rounded-[4px] border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900"
+                      placeholder="e.g. pretheekshafertility.com"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                      Address
+                    </label>
+                    <input
+                      type="text"
+                      value={clinicDetails.address}
+                      onChange={(e) => setClinicDetails({ ...clinicDetails, address: e.target.value })}
+                      className="h-8 text-xs px-3 rounded-[4px] border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900"
+                      placeholder="e.g. Medical College Road, Trivandrum, Kerala 695011"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <Button
+                    type="submit"
+                    variant="default"
+                    size="sm"
+                    className="h-8 px-4 text-xs font-semibold rounded-[4px]"
+                  >
+                    Save Clinic Details
+                  </Button>
+                </div>
+              </form>
+            </Card>
+          </div>
+        )}
 
       {/* TAB 1: HSN CODES */}
       {activeTab === "hsn" && (
@@ -579,6 +861,7 @@ export const SettingsManager: React.FC = () => {
           </div>
         </Card>
       )}
+      </main>
 
       {/* Add HSN Modal */}
       <Dialog open={isAddHsnOpen} onOpenChange={setIsAddHsnOpen}>
