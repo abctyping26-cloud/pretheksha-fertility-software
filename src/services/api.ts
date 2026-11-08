@@ -653,7 +653,7 @@ export function formatInvoiceNumber(seq: number, year = new Date().getFullYear()
 export async function fetchNextInvoiceNumber(): Promise<string> {
   const currentYear = new Date().getFullYear();
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/admin/accounting/invoice-sequence`);
+    const res = await fetch(`${API_BASE_URL}/api/v1/clinic/invoices/next-number`);
     if (res.ok) {
       const json = await res.json();
       const currentCount = Number(json?.data?.count) || 0;
@@ -682,7 +682,7 @@ export async function fetchNextInvoiceNumber(): Promise<string> {
 export async function commitInvoiceSequenceIncrement(): Promise<string> {
   const currentYear = new Date().getFullYear();
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/admin/accounting/invoice-sequence/increment`, {
+    const res = await fetch(`${API_BASE_URL}/api/v1/clinic/invoices/next-number/increment`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
     });
@@ -759,7 +759,7 @@ export async function saveInvoice(payload: SaveInvoicePayload): Promise<{
   message?: string;
   data?: any;
 }> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/admin/accounting/invoices`, {
+  const res = await fetch(`${API_BASE_URL}/api/v1/clinic/invoices`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -780,7 +780,7 @@ export async function updateInvoice(
   message?: string;
   data?: any;
 }> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/admin/accounting/invoices/${encodeURIComponent(id)}`, {
+  const res = await fetch(`${API_BASE_URL}/api/v1/clinic/invoices/${encodeURIComponent(id)}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -797,7 +797,7 @@ export async function deleteInvoice(id: string): Promise<{
   status: string;
   message?: string;
 }> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/admin/accounting/invoices/${encodeURIComponent(id)}`, {
+  const res = await fetch(`${API_BASE_URL}/api/v1/clinic/invoices/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   const json = await res.json();
@@ -810,7 +810,7 @@ export async function deleteInvoice(id: string): Promise<{
  */
 export async function fetchInvoices(): Promise<{ status: string; data: any[] }> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/admin/accounting/invoices`);
+    const res = await fetch(`${API_BASE_URL}/api/v1/clinic/invoices`);
     if (!res.ok) throw new Error("Failed to load invoices");
     const json = await res.json();
     return {
