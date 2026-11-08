@@ -631,3 +631,193 @@ export async function deleteClinicSignature(id: string): Promise<{ status: strin
   if (!res.ok) throw new Error(json.message || "Failed to delete signature");
   return json;
 }
+
+/* ==========================================================================
+   Cumulative Invoice Sequence API (MongoDB with Local Offline Fallback)
+   ========================================================================== */
+
+const INVOICE_SEQ_LOCAL_KEY = "pretheeksha_last_invoice_seq";
+
+/**
+ * Format invoice number string consistently, e.g. INV-2026-0001
+ */
+export function formatInvoiceNumber(seq: number, year = new Date().getFullYear()): string {
+  const safeSeq = Math.max(1, Number(seq) || 1);
+  return `INV-${year}-${String(safeSeq).padStart(4, "0")}`;
+}
+
+/**
+ * Fetch the next cumulative invoice number from MongoDB
+ * If offline, uses local workstation sequence cache
+ */
+export async function fetchNextInvoiceNumber(): Promise<string> {
+  const currentYear = new Date().getFullYear();
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/admin/accounting/invoice-sequence`);
+    if (res.ok) {
+      const json = await res.json();
+      const currentCount = Number(json?.data?.count) || 0;
+      const nextCount = currentCount + 1;
+      try {
+        localStorage.setItem(INVOICE_SEQ_LOCAL_KEY, String(currentCount));
+      } catch {}
+      return formatInvoiceNumber(nextCount, currentYear);
+    }
+  } catch {}
+
+  // Local fallback if backend unavailable
+  let localLastSeq = 0;
+  try {
+    const saved = localStorage.getItem(INVOICE_SEQ_LOCAL_KEY);
+    if (saved) localLastSeq = Number(saved) || 0;
+  } catch {}
+
+  return formatInvoiceNumber(localLastSeq + 1, currentYear);
+}
+
+/**
+ * Atomically commit and increment the invoice sequence in MongoDB
+ * Called when an invoice is printed or finalized
+ */
+export async function commitInvoiceSequenceIncrement(): Promise<string> {
+  const currentYear = new Date().getFullYear();
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/admin/accounting/invoice-sequence/increment`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const newCount = Number(json?.data?.count) || 1;
+      try {
+        localStorage.setItem(INVOICE_SEQ_LOCAL_KEY, String(newCount));
+      } catch {}
+      return formatInvoiceNumber(newCount, currentYear);
+    }
+  } catch {}
+
+  // Fallback local increment
+  let localLastSeq = 0;
+  try {
+    const saved = localStorage.getItem(INVOICE_SEQ_LOCAL_KEY);
+    if (saved) localLastSeq = Number(saved) || 0;
+    localLastSeq += 1;
+    localStorage.setItem(INVOICE_SEQ_LOCAL_KEY, String(localLastSeq));
+  } catch {}
+
+  return formatInvoiceNumber(localLastSeq, currentYear);
+}
+
+/* ==========================================================================
+   Invoices Persistence API (MongoDB Real Backend)
+   ========================================================================== */
+
+export interface SaveInvoicePayload {
+  invoiceNo: string;
+  invoiceDate?: string;
+  customer: {
+    name: string;
+    email?: string;
+    mobile?: string;
+    address?: string;
+  };
+  lineItems: Array<{
+    slNo?: number;
+    description: string;
+    hsnCode?: string;
+    packageCode?: string;
+    qty: number;
+    unitPrice: number;
+    costPrice?: number;
+    mrp?: number;
+    gstRate?: number;
+    gstAmount?: number;
+    totalAmount: number;
+  }>;
+  paymentDetails?: {
+    payMethod?: string;
+    payDescription?: string;
+  };
+  financialSummary?: {
+    totalBeforeVat?: string;
+    vat?: string;
+    grossAmount?: string;
+    total?: string;
+    paid?: string;
+    balance?: string;
+    publicTotal?: string;
+    dbTotal?: string;
+  };
+  notes?: string;
+}
+
+/**
+ * Save a new invoice to MongoDB
+ */
+export async function saveInvoice(payload: SaveInvoicePayload): Promise<{
+  status: string;
+  message?: string;
+  data?: any;
+}> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/admin/accounting/invoices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || "Failed to save invoice to database");
+  return json;
+}
+
+/**
+ * Update existing invoice in MongoDB
+ */
+export async function updateInvoice(
+  id: string,
+  payload: SaveInvoicePayload
+): Promise<{
+  status: string;
+  message?: string;
+  data?: any;
+}> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/admin/accounting/invoices/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || "Failed to update invoice in database");
+  return json;
+}
+
+/**
+ * Delete invoice from MongoDB
+ */
+export async function deleteInvoice(id: string): Promise<{
+  status: string;
+  message?: string;
+}> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/admin/accounting/invoices/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || "Failed to delete invoice from database");
+  return json;
+}
+
+/**
+ * Fetch all invoices from MongoDB
+ */
+export async function fetchInvoices(): Promise<{ status: string; data: any[] }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/admin/accounting/invoices`);
+    if (!res.ok) throw new Error("Failed to load invoices");
+    const json = await res.json();
+    return {
+      status: "success",
+      data: json.data?.invoices || [],
+    };
+  } catch {
+    return { status: "success", data: [] };
+  }
+}

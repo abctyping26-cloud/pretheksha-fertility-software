@@ -8,6 +8,11 @@ import {
   promoteClinicItem,
   recordClinicItemUsage,
   fetchClinicSignatures,
+  fetchNextInvoiceNumber,
+  commitInvoiceSequenceIncrement,
+  saveInvoice,
+  updateInvoice,
+  type SaveInvoicePayload,
   type PatientItem,
   type HsnCodeItem,
   type ClinicInventoryItem,
@@ -31,6 +36,8 @@ import {
   ArrowRight,
   User,
   PenTool,
+  Save,
+  Check,
 } from "lucide-react";
 
 export interface LineItem {
@@ -47,6 +54,8 @@ export interface LineItem {
 
 interface A4InvoiceEditorProps {
   onClose: () => void;
+  onSaved?: () => void;
+  editingInvoice?: any;
 }
 
 const INITIAL_EMPTY_ITEMS: LineItem[] = [
@@ -73,13 +82,23 @@ interface PaginatedSheet {
 }
 
 function paginateInvoiceItems(allItems: LineItem[]): PaginatedSheet[] {
-  const SINGLE_PAGE_MAX = 9;
-  const PAGE_1_FULL_CAPACITY = 15;
-  const INTERMEDIATE_CAPACITY = 14;
-  const FINAL_PAGE_WITH_FOOTER_MAX = 10;
+  // Page 1 capacities:
+  // With full modern header + footer, page 1 fits up to 6 items.
+  // Starting from the 7th item, a new page starts.
+  // Page 1 without footer can hold up to 12 items maximum.
+  const PAGE_1_WITH_FOOTER_MAX = 6;
+  const PAGE_1_FULL_CAPACITY = 12;
 
-  // 1. Single Page: Table + Full Header + Footer Section all fit on Page 1 (up to 9 items)
-  if (allItems.length <= SINGLE_PAGE_MAX) {
+  // Subsequent page capacities:
+  // Compact header (logo + title) takes only ~75px.
+  // If page contains footer, up to 10 items fit comfortably with footer.
+  // If page does NOT contain footer (overflows to next page),
+  // the table fills the second page (up to 20 items) before starting the 3rd page.
+  const SUBSEQUENT_PAGE_WITH_FOOTER_MAX = 10;
+  const SUBSEQUENT_PAGE_FULL_CAPACITY = 20;
+
+  // 1. Fits entirely on Page 1 (1 to 6 items): Table + Full Header + Footer Section
+  if (allItems.length <= PAGE_1_WITH_FOOTER_MAX) {
     return [
       {
         pageIndex: 0,
@@ -93,7 +112,7 @@ function paginateInvoiceItems(allItems: LineItem[]): PaginatedSheet[] {
     ];
   }
 
-  // 2. Table fits on Page 1 (10 to 15 items), only Terms & Conditions/Totals jump to Page 2
+  // 2. Fits on Page 1 table (7 to 12 items), Footer jumps to Page 2
   if (allItems.length <= PAGE_1_FULL_CAPACITY) {
     return [
       {
@@ -117,7 +136,7 @@ function paginateInvoiceItems(allItems: LineItem[]): PaginatedSheet[] {
     ];
   }
 
-  // 3. Page 1 table is full (15 items) and overflows into a new table on subsequent page(s)
+  // 3. Page 1 table is full (12 items) and overflows into a new table on subsequent page(s)
   const sheets: PaginatedSheet[] = [];
   sheets.push({
     pageIndex: 0,
@@ -133,7 +152,9 @@ function paginateInvoiceItems(allItems: LineItem[]): PaginatedSheet[] {
   let offset = 0;
   while (offset < remaining.length) {
     const itemsLeft = remaining.length - offset;
-    if (itemsLeft <= FINAL_PAGE_WITH_FOOTER_MAX) {
+
+    // If remaining items can fit on this sheet along with the footer section (<= 10 items)
+    if (itemsLeft <= SUBSEQUENT_PAGE_WITH_FOOTER_MAX) {
       sheets.push({
         pageIndex: sheets.length,
         isFirstPage: false,
@@ -144,8 +165,15 @@ function paginateInvoiceItems(allItems: LineItem[]): PaginatedSheet[] {
         showAddRow: true,
       });
       break;
-    } else {
-      const take = Math.min(INTERMEDIATE_CAPACITY, itemsLeft - 1);
+    }
+
+    // Remaining items exceed 10.
+    // The table must fill this page (up to SUBSEQUENT_PAGE_FULL_CAPACITY = 20)
+    // before starting a new table on the next page.
+    const take = Math.min(SUBSEQUENT_PAGE_FULL_CAPACITY, itemsLeft);
+    const hasMore = offset + take < remaining.length;
+
+    if (hasMore) {
       sheets.push({
         pageIndex: sheets.length,
         isFirstPage: false,
@@ -156,13 +184,40 @@ function paginateInvoiceItems(allItems: LineItem[]): PaginatedSheet[] {
         showAddRow: false,
       });
       offset += take;
+    } else {
+      // All remaining items fit on this page (11 to 20 items),
+      // filling the page's table. The footer section moves to the next page.
+      sheets.push({
+        pageIndex: sheets.length,
+        isFirstPage: false,
+        isLastPage: false,
+        items: remaining.slice(offset, offset + take),
+        hasTable: true,
+        hasFooterSection: false,
+        showAddRow: true,
+      });
+      offset += take;
+
+      sheets.push({
+        pageIndex: sheets.length,
+        isFirstPage: false,
+        isLastPage: true,
+        items: [],
+        hasTable: false,
+        hasFooterSection: true,
+        showAddRow: true,
+      });
+      break;
     }
   }
 
   return sheets;
 }
 
-export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => {
+export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose, onSaved, editingInvoice }) => {
+  const [isSavingInvoice, setIsSavingInvoice] = useState(false);
+  const [isSavedSuccess, setIsSavedSuccess] = useState(false);
+
   // Clinic Logo & System Defaults (from localStorage)
   const [clinicLogo] = useState<string | null>(() => {
     try {
@@ -202,10 +257,20 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
 
   // Invoice Title & Meta State
   const [invoiceTitle, setInvoiceTitle] = useState("Invoice");
-  const [invoiceNo, setInvoiceNo] = useState(
-    () => `INV-${new Date().getFullYear()}-0001`
-  );
+  const [invoiceNo, setInvoiceNo] = useState<string>(() => {
+    if (editingInvoice?.invoiceNo) return editingInvoice.invoiceNo;
+    try {
+      const lastSeq = localStorage.getItem("pretheeksha_last_invoice_seq");
+      const nextSeq = lastSeq ? Number(lastSeq) + 1 : 1;
+      return `INV-${new Date().getFullYear()}-${String(nextSeq).padStart(4, "0")}`;
+    } catch {
+      return `INV-${new Date().getFullYear()}-0001`;
+    }
+  });
+  const hasCommittedSequence = useRef(Boolean(editingInvoice));
+
   const [invoiceDate, setInvoiceDate] = useState(() =>
+    editingInvoice?.invoiceDate ||
     new Date().toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -222,11 +287,11 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
     });
   });
 
-  // Client & Meta State (clean empty defaults)
-  const [clientName, setClientName] = useState("");
-  const [clientEmail, setClientEmail] = useState("");
-  const [clientAddress, setClientAddress] = useState("");
-  const [clientPhone, setClientPhone] = useState("");
+  // Client & Meta State (clean empty defaults or editingInvoice values)
+  const [clientName, setClientName] = useState(() => editingInvoice?.customer?.name || editingInvoice?.patientName || "");
+  const [clientEmail, setClientEmail] = useState(() => editingInvoice?.customer?.email || "");
+  const [clientAddress, setClientAddress] = useState(() => editingInvoice?.customer?.address || "");
+  const [clientPhone, setClientPhone] = useState(() => editingInvoice?.customer?.mobile || editingInvoice?.customer?.phone || "");
 
   // Patient Database Search State
   const [isPatientSearchOpen, setIsPatientSearchOpen] = useState(false);
@@ -240,7 +305,21 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
   const [clinicInventory, setClinicInventory] = useState<ClinicInventoryItem[]>([]);
 
   // Line Items State
-  const [items, setItems] = useState<LineItem[]>(INITIAL_EMPTY_ITEMS);
+  const [items, setItems] = useState<LineItem[]>(() => {
+    if (Array.isArray(editingInvoice?.lineItems) && editingInvoice.lineItems.length > 0) {
+      return editingInvoice.lineItems.map((it: any, idx: number) => ({
+        id: String(it.id || it._id || idx + 1),
+        description: it.description || "",
+        hsnCode: it.hsnCode || it.packageCode || "",
+        qty: Number(it.qty) || 1,
+        unitPrice: Number(it.unitPrice) || 0,
+        gstRate: Number(it.gstRate) || 0,
+        costPrice: Number(it.costPrice) || 0,
+        mrp: Number(it.mrp) || Number(it.unitPrice) || 0,
+      }));
+    }
+    return INITIAL_EMPTY_ITEMS;
+  });
 
   // Autocomplete / Search Popover State for active row
   const [activeSearchRowId, setActiveSearchRowId] = useState<string | null>(null);
@@ -420,14 +499,55 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
 
   // Terms, Tax & Payment State
   const [terms, setTerms] = useState(
-    "Payment is due within 15 days\nfrom the date of the invoice."
+    () => editingInvoice?.notes || "Payment is due within 15 days\nfrom the date of the invoice."
   );
   const [paymentMethod, setPaymentMethod] = useState<
     "cash" | "bank_transfer" | "debit" | "digital_wallet"
-  >("cash");
+  >(() => editingInvoice?.paymentDetails?.payMethod || "cash");
   const [signatoryName, setSignatoryName] = useState("Dr. Pretheeksha");
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
   const [activeSignature, setActiveSignature] = useState<ClinicSignatureItem | null>(null);
+
+  // Sync invoice number or load editing invoice details if prop changes
+  useEffect(() => {
+    if (editingInvoice) {
+      if (editingInvoice.invoiceNo) setInvoiceNo(editingInvoice.invoiceNo);
+      if (editingInvoice.invoiceDate) setInvoiceDate(editingInvoice.invoiceDate);
+      if (editingInvoice.customer?.name || editingInvoice.patientName) {
+        setClientName(editingInvoice.customer?.name || editingInvoice.patientName);
+      }
+      if (editingInvoice.customer?.email) setClientEmail(editingInvoice.customer.email);
+      if (editingInvoice.customer?.mobile || editingInvoice.customer?.phone) {
+        setClientPhone(editingInvoice.customer.mobile || editingInvoice.customer.phone);
+      }
+      if (editingInvoice.customer?.address) setClientAddress(editingInvoice.customer.address);
+      if (Array.isArray(editingInvoice.lineItems) && editingInvoice.lineItems.length > 0) {
+        setItems(
+          editingInvoice.lineItems.map((it: any, idx: number) => ({
+            id: String(it.id || it._id || idx + 1),
+            description: it.description || "",
+            hsnCode: it.hsnCode || it.packageCode || "",
+            qty: Number(it.qty) || 1,
+            unitPrice: Number(it.unitPrice) || 0,
+            gstRate: Number(it.gstRate) || 0,
+            costPrice: Number(it.costPrice) || 0,
+            mrp: Number(it.mrp) || Number(it.unitPrice) || 0,
+          }))
+        );
+      }
+      if (editingInvoice.notes) setTerms(editingInvoice.notes);
+      if (editingInvoice.paymentDetails?.payMethod) {
+        setPaymentMethod(editingInvoice.paymentDetails.payMethod);
+      }
+      hasCommittedSequence.current = true;
+    } else {
+      fetchNextInvoiceNumber().then((nextNo) => {
+        if (nextNo) {
+          setInvoiceNo(nextNo);
+        }
+      });
+    }
+  }, [editingInvoice]);
 
   // Load doctor signatures from MongoDB on mount & restore system favorite
   useEffect(() => {
@@ -689,7 +809,10 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
     setClientEmail("");
     setClientAddress("");
     setClientPhone("");
-    setInvoiceNo(`INV-${new Date().getFullYear()}-0001`);
+    fetchNextInvoiceNumber().then((nextNo) => {
+      if (nextNo) setInvoiceNo(nextNo);
+    });
+    hasCommittedSequence.current = false;
     setInvoiceDate(
       new Date().toLocaleDateString("en-US", {
         month: "short",
@@ -712,9 +835,86 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
     setSignatoryName("Dr. Pretheeksha");
   };
 
+  const handleSaveInvoice = async () => {
+    if (!clientName.trim()) {
+      alert("Please enter or select a patient name under 'Bill to' before saving.");
+      return;
+    }
+
+    setIsSavingInvoice(true);
+    try {
+      const payload: SaveInvoicePayload = {
+        invoiceNo,
+        invoiceDate,
+        customer: {
+          name: clientName.trim(),
+          email: clientEmail.trim(),
+          mobile: clientPhone.trim(),
+          address: clientAddress.trim(),
+        },
+        lineItems: items.map((item, idx) => {
+          const qty = Number(item.qty) || 1;
+          const unitPrice = Number(item.unitPrice) || 0;
+          const taxable = qty * unitPrice;
+          const gstRate = Number(item.gstRate) || 0;
+          const gstAmt = (taxable * gstRate) / 100;
+          const mrp = Number(item.mrp) || unitPrice;
+          return {
+            slNo: idx + 1,
+            description: item.description.trim() || "Consultation / Procedure",
+            packageCode: item.hsnCode.trim(),
+            hsnCode: item.hsnCode.trim(),
+            qty,
+            unitPrice,
+            costPrice: Number(item.costPrice) || 0,
+            mrp,
+            gstRate,
+            gstAmount: gstAmt,
+            totalAmount: taxable + gstAmt,
+          };
+        }),
+        paymentDetails: {
+          payMethod: paymentMethod,
+          payDescription: `Paid via ${paymentMethod}`,
+        },
+        financialSummary: {
+          totalBeforeVat: String(subtotal),
+          vat: String(totalGst),
+          grossAmount: String(grandTotal),
+          total: String(grandTotal),
+          paid: String(grandTotal),
+          balance: "0",
+        },
+        notes: terms,
+      };
+
+      const targetId = editingInvoice?.id || editingInvoice?._id;
+      if (targetId) {
+        await updateInvoice(targetId, payload);
+      } else {
+        await saveInvoice(payload);
+        hasCommittedSequence.current = true;
+      }
+
+      setIsSavedSuccess(true);
+      if (onSaved) onSaved();
+      setTimeout(() => setIsSavedSuccess(false), 2500);
+    } catch (err: any) {
+      alert(err.message || "Failed to save invoice to database");
+    } finally {
+      setIsSavingInvoice(false);
+    }
+  };
+
   const handlePrint = async () => {
     window.focus();
     try {
+      // Atomically advance cumulative sequence counter in database
+      if (!hasCommittedSequence.current) {
+        commitInvoiceSequenceIncrement();
+        hasCommittedSequence.current = true;
+      }
+
       // If running inside Tauri v2 desktop, attempt native webview print
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("plugin:webview|print");
@@ -729,7 +929,9 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
       {/* Interactive Top Toolbar */}
       <div className="sliding-panel-header">
         <div className="flex items-center gap-2">
-          <span className="sliding-panel-title">Interactive A4 Invoice</span>
+          <span className="sliding-panel-title">
+            {editingInvoice ? `Edit Invoice (${invoiceNo})` : "Interactive A4 Invoice"}
+          </span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -757,6 +959,31 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
 
           <Button
             variant="default"
+            size="sm"
+            className="h-8 px-3 text-xs rounded-[6px] bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 font-semibold shadow-xs hover:opacity-90"
+            onClick={handleSaveInvoice}
+            disabled={isSavingInvoice}
+            title={editingInvoice ? "Update invoice in database" : "Save invoice to database"}
+          >
+            {isSavedSuccess ? (
+              <>
+                <Check className="h-3.5 w-3.5 mr-1 text-emerald-400" />
+                <span className="text-emerald-400 font-bold">{editingInvoice ? "Updated!" : "Saved!"}</span>
+              </>
+            ) : (
+              <>
+                <Save className="h-3.5 w-3.5 mr-1" />
+                <span>
+                  {isSavingInvoice
+                    ? (editingInvoice ? "Updating..." : "Saving...")
+                    : (editingInvoice ? "Update Invoice" : "Save Invoice")}
+                </span>
+              </>
+            )}
+          </Button>
+
+          <Button
+            variant="outline"
             size="sm"
             className="h-8 px-3 text-xs rounded-[6px]"
             onClick={handlePrint}
@@ -948,21 +1175,35 @@ export const A4InvoiceEditor: React.FC<A4InvoiceEditorProps> = ({ onClose }) => 
                 </div>
               </div>
             ) : (
-              <div className="a4-continuation-header">
-                <div className="a4-continuation-brand">
-                  <div className="a4-continuation-logo">P</div>
-                  <div>
-                    <div className="a4-continuation-title">{fromClinicName}</div>
-                    <div className="a4-continuation-sub">Invoice #{invoiceNo} (Continuation)</div>
-                  </div>
+              <div className="a4-continuation-header-modern">
+                <div className="a4-modern-logo-wrap">
+                  {clinicLogo ? (
+                    <img src={clinicLogo} alt={fromClinicName} />
+                  ) : (
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-14 w-14 rounded-[8px] bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 flex items-center justify-center font-extrabold text-2xl tracking-tighter shadow-xs">
+                        P
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-extrabold text-base tracking-tight text-neutral-900 dark:text-neutral-100 leading-tight">
+                          PRETHEEKSHA
+                        </span>
+                        <span className="text-[10px] font-bold text-neutral-400 tracking-widest uppercase">
+                          Fertility Clinic
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="a4-continuation-patient-info">
-                  <div>
-                    Patient: <strong className="text-neutral-900 dark:text-neutral-100">{clientName || "—"}</strong>
-                  </div>
-                  <div className="a4-page-counter-badge">
-                    Page {sheet.pageIndex + 1} of {sheets.length}
-                  </div>
+
+                <div className="a4-modern-title-meta">
+                  <input
+                    type="text"
+                    className="a4-modern-invoice-title-input"
+                    value={invoiceTitle}
+                    onChange={(e) => setInvoiceTitle(e.target.value)}
+                    placeholder="Invoice"
+                  />
                 </div>
               </div>
             )}

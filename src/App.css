@@ -2699,6 +2699,18 @@ button.btn-secondary:hover {
 }
 
 /* Continuation Header for Page 2+ */
+/* Continuation Header for Page 2+ (Matches Page 1 top row) */
+.a4-continuation-header-modern {
+  padding: 32px 40px 16px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  background-color: transparent;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .a4-continuation-header {
   padding: 14px 40px;
   display: flex;
@@ -3644,6 +3656,7 @@ button.btn-secondary:hover {
   }
 
   .a4-continuation-header,
+  .a4-continuation-header-modern,
   .a4-continuation-notice,
   .a4-footer-bar {
     -webkit-print-color-adjust: exact !important;
