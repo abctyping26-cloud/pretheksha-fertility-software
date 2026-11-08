@@ -286,16 +286,45 @@ export const InvoicesManager: React.FC<InvoicesManagerProps> = ({
   const partialCount = invoices.filter((inv) => inv.status === "partial").length;
   const pendingCount = invoices.filter((inv) => inv.status === "pending").length;
 
-  const todayCount = 0;
-  const todayPaid = 0;
-  const todayPending = 0;
+  const isSameDay = (dateStr: string | undefined, ref: Date): boolean => {
+    if (!dateStr) return false;
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return false;
+      return (
+        d.getFullYear() === ref.getFullYear() &&
+        d.getMonth() === ref.getMonth() &&
+        d.getDate() === ref.getDate()
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const todayInvoices = invoices.filter((inv) => isSameDay(inv.date, today));
+  const todayCount = todayInvoices.length;
+  const todayPaid = todayInvoices.filter((inv) => inv.status === "paid").length;
+  const todayPending = todayInvoices.filter((inv) => inv.status !== "paid").length;
 
   const settledCount = paidCount;
   const dueCount = invoices.filter((inv) => inv.dueAmount > 0).length;
 
   const monthIncome = invoices.reduce((acc, inv) => acc + (inv.paidAmount || 0), 0);
-  const weekIncome = 0;
-  const dayIncome = 0;
+
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - 7);
+  weekStart.setHours(0, 0, 0, 0);
+  const weekInvoices = invoices.filter((inv) => {
+    const d = new Date(inv.date);
+    return !isNaN(d.getTime()) && d >= weekStart && d <= today;
+  });
+  const weekIncome = weekInvoices.reduce((acc, inv) => acc + (inv.paidAmount || 0), 0);
+
+  const dayIncome = todayInvoices.reduce((acc, inv) => acc + (inv.paidAmount || 0), 0);
+
   const paymentDuesTotal = invoices.reduce((acc, inv) => acc + (inv.dueAmount || 0), 0);
 
   const filteredInvoices = useMemo(() => {
